@@ -1,0 +1,72 @@
+# modelo_negocio.md
+# 📊 Modelo de Negocio & Arquitectura: App "Contabilidad"
+
+## 📌 Resumen Ejecutivo
+Aplicación de gestión contable y financiera diseñada para PYMEs y profesionales independientes. Su propósito es centralizar el registro de transacciones (ingresos/gastos), catalogar productos/servicios, gestionar contactos (clientes/proveedores) y automatizar el seguimiento de facturas, plazos y cobros. El sistema opera como un **Libro Diario Digital** con lógica de negocio automatizada, adaptado a la normativa fiscal de Costa Rica.
+
+---
+
+## 🏗️ Arquitectura de Datos (Modelo Relacional)
+
+### 1. `Contactos` (Entidad Central)
+- **Propósito**: Directorio CRM de terceros relacionados.
+- **Tipos**: Cliente, Proveedor, Empleado.
+- **Campos Clave**: `ID_Contacto`, `Nombre_Razon_Social`, `Cedula_RUC`, `Telefono`, `Email`, `Direccion`, `Logo`.
+- **Relación**: 1:N con `Transacciones`.
+
+### 2. `Catalogo` (Inventario & Servicios)
+- **Propósito**: Base de datos de ítems facturables o gastos recurrentes.
+- **Campos Clave**: `ID_Item`, `Nombre_Item`, `Codigo_CABYS`, `Precio_Unitario`, `Tarifa_IVA`, `Categoria` (Servicios/Productos/Gastos Fijos), `Naturaleza` (Ingreso/Gasto), `Foto`.
+- **Relación**: 1:N con `Transacciones`.
+
+### 3. `Transacciones` (Núcleo Contable)
+- **Propósito**: Registro financiero maestro (Facturas, Notas, Gastos).
+- **Campos Operativos**: `Fecha`, `Tipo_Movimiento`, `Contacto_Ref`, `Item_Ref`, `Cantidad`, `Precio_Unitario`, `Moneda` (Colones/Dólares), `Tipo_Cambio`, `Metodo_Pago`, `Condicion_Venta` (Contado/Crédito).
+- **Campos Fiscales**: `Numero_Factura`, `Clave_Hacienda`, `Porcentaje_IVA`, `Monto_IVA`, `Monto_Descuento`.
+- **Campos Virtuales/Automáticos**: 
+  - `Total_Facturado` = `((Precio * Cantidad) - Descuento) + IVA`
+  - `Saldo_Actual` = `Total_Facturado - SUM(Abonos)`
+  - `Estado_Real` = Lógica dinámica (Pagado/Vencido/Pendiente/Contado)
+  - `Sugerencia_Accion` = Textos contextuales para gestión de cobros.
+
+### 4. `Abonos` (Gestión de Crédito)
+- **Propósito**: Registro de pagos parciales sobre ventas a crédito.
+- **Campos Clave**: `ID_Pago`, `Transaccion_Ref`, `Fecha_Pago`, `Monto_Pagado`, `Comprobante_Pago`.
+- **Relación**: N:1 con `Transacciones`.
+
+---
+
+## ⚙️ Lógica de Negocio & Automatizaciones
+| Automatización | Fórmula/Condición | Impacto |
+|---|---|---|
+| **Cálculo de IVA** | `([Precio]*[Cantidad] - Descuento) * Porc_IVA` | Precisión fiscal automática |
+| **Estado Dinámico** | `IFS(Pagado, Pagado / AND(Crédito, HOY()>Vencimiento), Vencido, ...)` | Alertas visuales en tiempo real |
+| **Sugerencias IA-Style** | `IFS(Pagado, "✅ Finalizado" / Vencido, "🚨 LLAMAR URGENTE: [Teléfono]")` | Reduce mora y mejora cashflow |
+| **Filtrado Inteligente** | `Valid_If` en `Contacto_Ref` y `Item_Ref` | Evita errores de asignación (ej. solo mostrar Clientes si es Ingreso) |
+
+---
+
+## 📊 Interfaces de Usuario (Vistas)
+- **`Dashboard`**: Vista principal con `Libro` (transacciones recientes), `Gráfico_Balance` (Ingresos vs Gastos), `Ventas_por_Cliente`.
+- **`Cuentas`**: Dashboard dual con `Gráfico_CXC` (Cuentas por Cobrar) y `Gráfico_CXP` (Cuentas por Pagar).
+- **`Directorio` & `Catalogo`**: Vistas tipo tarjeta con acciones rápidas (Llamar, SMS, Email, Mapa).
+- **`Libro`**: Deck agrupado por fecha (Descendente), ideal para auditoría rápida.
+- **`Mapa`**: Geolocalización de contactos con dirección registrada.
+
+---
+
+## 🌍 Diferenciadores Clave (Contexto CR)
+- ✅ Código **CABYS** (Clasificación de Bienes y Servicios de Hacienda)
+- ✅ **Clave de Comprobante Electrónico** (Soporte para FE/NC/ND)
+- ✅ Integración visual de **SINPE Móvil**, Transferencia, Tarjeta, Efectivo.
+- ✅ Multi-moneda con **Tipo de Cambio** configurable (₡ / $)
+- ✅ Lógica de **Crédito vs Contado** con cálculo automático de fechas de vencimiento.
+
+---
+
+## 🚀 Puntos para Escalabilidad (Roadmap)
+1. **API Gateway**: Exportar datos vía REST a ERPs (SAP, Odoo) o plataformas de facturación electrónica (FacturaPro, Nubox).
+2. **Multi-tenant**: Agregar `Empresa_ID` y `Rol_Usuario` para soportar contadores con múltiples clientes.
+3. **IA Predictiva**: Usar historial de `Saldo_Actual` y `Plazo_Dias` para predecir flujo de caja mensual.
+4. **Notificaciones Push/Webhook**: Disparar alertas de vencimiento vía WhatsApp Business API o Email automático.
+5. **Auditoría Inmutable**: Log de cambios en `Transacciones` para cumplimiento de normativas de auditoría financiera.
