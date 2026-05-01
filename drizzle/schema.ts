@@ -94,14 +94,15 @@ export const sales = sqliteTable('sales', {
   branchId: text('branch_id').references(() => branches.id),
   contactId: text('contact_id').references(() => contacts.id),
   userId: text('user_id').references(() => users.id),
-  subtotal: real('subtotal').notNull(),
-  discount: real('discount').default(0),
-  taxAmount: real('tax_amount').notNull(),
-  totalAmount: real('total_amount').notNull(),
+  // PRECISIÓN MONETARIA: Usamos céntimos (INTEGER) para evitar errores de punto flotante
+  subtotalCents: integer('subtotal_cents').notNull(),
+  discountCents: integer('discount_cents').default(0),
+  taxAmountCents: integer('tax_amount_cents').notNull(),
+  totalAmountCents: integer('total_amount_cents').notNull(),
   paymentMethod: text('payment_method', { enum: ['cash', 'card', 'transfer', 'mixed', 'credit'] }),
   paymentStatus: text('payment_status', { enum: ['paid', 'pending', 'partial'] }).default('paid'),
-  amountPaid: real('amount_paid').default(0),
-  changeAmount: real('change_amount').default(0),
+  amountPaidCents: integer('amount_paid_cents').default(0),
+  changeAmountCents: integer('change_amount_cents').default(0),
   notes: text('notes'),
   cancelled: integer('cancelled').default(0),
   // CLAVE HACIENDA PARA FACTURACIÓN ELECTRÓNICA (50 dígitos)
@@ -109,11 +110,14 @@ export const sales = sqliteTable('sales', {
   haciendaStatus: text('hacienda_status', { 
     enum: ['pending', 'sent', 'accepted', 'rejected'] 
   }).default('pending'),
+  // ISO 42001: Explicación de decisiones automatizadas
+  aiExplanation: text('ai_explanation'),
+  confidenceScore: real('confidence_score'),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_sales_customer').on(table.customerId),
+  index('idx_sales_contact').on(table.contactId),
   index('idx_sales_user').on(table.userId),
   index('idx_sales_branch').on(table.branchId),
   index('idx_sales_created_at').on(table.createdAt),
@@ -125,10 +129,12 @@ export const saleItems = sqliteTable('sale_items', {
   saleId: text('sale_id').notNull().references(() => sales.id, { onDelete: 'cascade' }),
   productId: text('product_id').references(() => products.id),
   quantity: real('quantity').notNull(),
-  unitPrice: real('unit_price').notNull(),
-  discount: real('discount').default(0),
-  taxAmount: real('tax_amount').notNull(),
-  totalAmount: real('total_amount').notNull(),
+  unitPriceCents: integer('unit_price_cents').notNull(),
+  discountCents: integer('discount_cents').default(0),
+  taxAmountCents: integer('tax_amount_cents').notNull(),
+  totalAmountCents: integer('total_amount_cents').notNull(),
+  // ISO 42001: Trazabilidad de sugerencias de IA en items
+  aiSuggestionId: text('ai_suggestion_id'),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
@@ -307,9 +313,10 @@ export const expenses = sqliteTable('expenses', {
   id: text('id').primaryKey(),
   organizationId: text('organization_id').references(() => organizations.id),
   expenseNumber: text('expense_number').unique(),
-  amount: real('amount').notNull(),
-  subtotal: real('subtotal').notNull(),
-  taxAmount: real('tax_amount').default(0),
+  // PRECISIÓN MONETARIA: Céntimos enteros
+  amountCents: integer('amount_cents').notNull(),
+  subtotalCents: integer('subtotal_cents').notNull(),
+  taxAmountCents: integer('tax_amount_cents').default(0),
   taxRate: real('tax_rate').default(0.13),
   // CATEGORÍA NIIF: Clasificación según NIIF para PYMES
   niifCategory: text('niif_category', { 
@@ -333,6 +340,8 @@ export const expenses = sqliteTable('expenses', {
   haciendaKey: text('hacienda_key'),
   status: text('status', { enum: ['pending', 'completed', 'cancelled'] }).default('completed'),
   createdBy: text('created_by').references(() => users.id),
+  // ISO 42001: Trazabilidad de IA
+  aiSuggestionId: text('ai_suggestion_id'),
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
@@ -352,9 +361,10 @@ export const revenues = sqliteTable('revenues', {
   revenueNumber: text('revenue_number').unique(),
   saleId: text('sale_id').references(() => sales.id),
   contactId: text('contact_id').references(() => contacts.id),
-  amount: real('amount').notNull(),
-  subtotal: real('subtotal').notNull(),
-  taxAmount: real('tax_amount').default(0),
+  // PRECISIÓN MONETARIA: Céntimos enteros
+  amountCents: integer('amount_cents').notNull(),
+  subtotalCents: integer('subtotal_cents').notNull(),
+  taxAmountCents: integer('tax_amount_cents').default(0),
   taxRate: real('tax_rate').default(0.13),
   // CATEGORÍA NIIF: Clasificación según NIIF para PYMES
   niifCategory: text('niif_category', {
@@ -375,6 +385,8 @@ export const revenues = sqliteTable('revenues', {
   haciendaKey: text('hacienda_key'),
   status: text('status', { enum: ['pending', 'completed', 'cancelled'] }).default('completed'),
   createdBy: text('created_by').references(() => users.id),
+  // ISO 42001: Trazabilidad de IA
+  aiSuggestionId: text('ai_suggestion_id'),
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
@@ -483,4 +495,218 @@ export const organizationSettings = sqliteTable('organization_settings', {
 }, (table) => [
   index('idx_org_settings_org').on(table.organizationId),
   index('idx_org_settings_key').on(table.settingKey),
+]);
+
+// ============================================
+// PARTIDA DOBLE AUTOMÁTICA (NIIF/IFRS)
+// ============================================
+// Tablas para asientos contables automáticos estilo SAP/Alegra
+// ============================================
+
+export const chartOfAccounts = sqliteTable('chart_of_accounts', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  accountCode: text('account_code').notNull(), // Ej: 1-01-001
+  accountName: text('account_name').notNull(),
+  accountType: text('account_type', { 
+    enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] 
+  }).notNull(),
+  parentAccountId: text('parent_account_id').references(() => chartOfAccounts.id),
+  normalBalance: text('normal_balance', { enum: ['debit', 'credit'] }).notNull(),
+  isActive: integer('is_active').default(1),
+  niifCode: text('niif_code'), // Código NIIF (ej: 1105, 4135)
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_chart_org').on(table.organizationId),
+  index('idx_chart_code').on(table.accountCode),
+  index('idx_chart_type').on(table.accountType),
+]);
+
+export const journalEntries = sqliteTable('journal_entries', {
+  id: text('id').primaryKey(),
+  entryNumber: text('entry_number').unique().notNull(), // Ej: ASIENTO-2024-00001
+  organizationId: text('organization_id').references(() => organizations.id),
+  branchId: text('branch_id').references(() => branches.id),
+  transactionDate: integer('transaction_date', { mode: 'number' }).notNull(), // Epoch 13
+  postingDate: integer('posting_date', { mode: 'number' }).notNull(), // Epoch 13
+  documentType: text('document_type', { 
+    enum: ['sale', 'purchase', 'expense', 'payment', 'receipt', 'adjustment', 'payroll'] 
+  }).notNull(),
+  documentId: text('document_id'), // ID de la transacción original (venta, gasto, etc.)
+  description: text('description').notNull(),
+  reference: text('reference'), // Número de factura, recibo, etc.
+  totalDebitsCents: integer('total_debits_cents').notNull(),
+  totalCreditsCents: integer('total_credits_cents').notNull(),
+  isPosted: integer('is_posted').default(0), // 0=Borrador, 1=Contabilizado
+  isReversed: integer('is_reversed').default(0),
+  reversedBy: text('reversed_by').references(() => journalEntries.id),
+  // ISO 42001: Trazabilidad de automatización
+  autoGenerated: integer('auto_generated').default(0), // Generado automáticamente por el sistema
+  aiExplanation: text('ai_explanation'), // Explicación de por qué se generó este asiento
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_journal_org').on(table.organizationId),
+  index('idx_journal_date').on(table.transactionDate),
+  index('idx_journal_document').on(table.documentId),
+  index('idx_journal_posted').on(table.isPosted),
+]);
+
+export const journalLines = sqliteTable('journal_lines', {
+  id: text('id').primaryKey(),
+  journalEntryId: text('journal_entry_id').notNull().references(() => journalEntries.id, { onDelete: 'cascade' }),
+  lineNumber: integer('line_number').notNull(),
+  accountId: text('account_id').notNull().references(() => chartOfAccounts.id),
+  description: text('description'),
+  debitCents: integer('debit_cents').default(0),
+  creditCents: integer('credit_cents').default(0),
+  // Dimensiones analíticas
+  contactId: text('contact_id').references(() => contacts.id),
+  productId: text('product_id').references(() => products.id),
+  branchId: text('branch_id').references(() => branches.id),
+  // ISO 42001: Trazabilidad
+  aiSuggestionId: text('ai_suggestion_id'),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_lines_entry').on(table.journalEntryId),
+  index('idx_lines_account').on(table.accountId),
+  index('idx_lines_contact').on(table.contactId),
+]);
+
+// ============================================
+// MOTOR DE SUGERENCIAS INTELIGENTES (IA)
+// ============================================
+// Sistema de recomendaciones basado en datos históricos
+// ISO 42001: IA Ética y Explicable
+// ============================================
+
+export const aiSuggestions = sqliteTable('ai_suggestions', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  suggestionType: text('suggestion_type', {
+    enum: [
+      'promotion',          // Sugerir promoción
+      'restock',            // Reponer inventario
+      'price_adjustment',   // Ajustar precio
+      'bundle',             // Crear combo
+      'waste_reduction',    // Reducir desperdicio
+      'upsell',             // Sugerir venta cruzada
+      'staff_optimization'  // Optimizar personal
+    ]
+  }).notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  // DATOS DE CONTEXTO
+  relatedProductId: text('product_id').references(() => products.id),
+  relatedContactId: text('contact_id').references(() => contacts.id),
+  relatedSaleId: text('sale_id').references(() => sales.id),
+  // METADATOS DE IA
+  confidenceScore: real('confidence_score').notNull(), // 0.0 a 1.0
+  expectedImpact: text('expected_impact'), // Ej: "+15% ventas", "-20% desperdicio"
+  algorithmUsed: text('algorithm_used'), // Ej: "apriori", "time_series", "rfm"
+  explanation: text('explanation').notNull(), // Explicación humana de la sugerencia
+  dataPoints: integer('data_points'), // Cantidad de datos analizados
+  // ESTADO
+  status: text('status', { 
+    enum: ['pending', 'accepted', 'rejected', 'expired'] 
+  }).default('pending'),
+  acceptedAt: integer('accepted_at', { mode: 'number' }),
+  rejectedAt: integer('rejected_at', { mode: 'number' }),
+  expiresAt: integer('expires_at', { mode: 'number' }),
+  // AUDITORÍA
+  reviewedBy: text('reviewed_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_ai_org').on(table.organizationId),
+  index('idx_ai_type').on(table.suggestionType),
+  index('idx_ai_status').on(table.status),
+  index('idx_ai_product').on(table.relatedProductId),
+  index('idx_ai_confidence').on(table.confidenceScore),
+]);
+
+// ============================================
+// AUDITORÍA AVANZADA (ISO 27001)
+// ============================================
+// Logs inmutables para trazabilidad completa
+// ============================================
+
+export const auditLogsEnhanced = sqliteTable('audit_logs_enhanced', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  userId: text('user_id').references(() => users.id),
+  action: text('action').notNull(), // CREATE, UPDATE, DELETE, LOGIN, EXPORT, etc.
+  resourceType: text('resource_type').notNull(), // 'sale', 'product', 'contact', etc.
+  resourceId: text('resource_id'),
+  oldValue: text('old_value'), // JSON del estado anterior
+  newValue: text('new_value'), // JSON del nuevo estado
+  // CONTEXTO DE SEGURIDAD
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  sessionId: text('session_id'),
+  // ISO 27001: Clasificación de eventos
+  securityLevel: text('security_level', {
+    enum: ['info', 'warning', 'critical', 'audit']
+  }).default('info'),
+  isAutomated: integer('is_automated').default(0), // Acción ejecutada por el sistema
+  aiDecisionId: text('ai_decision_id'), // Si fue decisión de IA
+  // INTEGRIDAD
+  hash: text('hash'), // Hash SHA-256 para verificar integridad
+  previousHash: text('previous_hash'), // Encadenamiento tipo blockchain
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_audit_org').on(table.organizationId),
+  index('idx_audit_user').on(table.userId),
+  index('idx_audit_action').on(table.action),
+  index('idx_audit_resource').on(table.resourceType),
+  index('idx_audit_date').on(table.createdAt),
+  index('idx_audit_security').on(table.securityLevel),
+]);
+
+// ============================================
+// DECISIONES DE IA (ISO 42001)
+// ============================================
+// Registro de todas las decisiones automatizadas
+// ============================================
+
+export const aiDecisionsLog = sqliteTable('ai_decisions_log', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  decisionType: text('decision_type', {
+    enum: [
+      'pricing',           // Ajuste de precios
+      'inventory',         // Gestión de inventario
+      'credit_approval',   // Aprobación de crédito
+      'fraud_detection',   // Detección de fraude
+      'recommendation',    // Recomendación de productos
+      'accounting',        // Asiento contable automático
+      'billing'            // Facturación automática
+    ]
+  }).notNull(),
+  inputContext: text('input_context').notNull(), // JSON con los datos de entrada
+  outputDecision: text('output_decision').notNull(), // JSON con la decisión tomada
+  confidenceScore: real('confidence_score'),
+  algorithmVersion: text('algorithm_version'),
+  // EXPLICABILIDAD (ISO 42001)
+  explanation: text('explanation').notNull(), // Explicación en lenguaje natural
+  alternativeOptions: text('alternative_options'), // Otras opciones consideradas
+  // IMPACTO
+  financialImpactCents: integer('financial_impact_cents'),
+  riskLevel: text('risk_level', {
+    enum: ['low', 'medium', 'high', 'critical']
+  }).default('low'),
+  // HUMAN-IN-THE-LOOP
+  requiresReview: integer('requires_review').default(0),
+  reviewedBy: text('reviewed_by').references(() => users.id),
+  reviewNotes: text('review_notes'),
+  reviewedAt: integer('reviewed_at', { mode: 'number' }),
+  // AUDITORÍA
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_ai_decisions_org').on(table.organizationId),
+  index('idx_ai_decisions_type').on(table.decisionType),
+  index('idx_ai_decisions_risk').on(table.riskLevel),
+  index('idx_ai_decisions_review').on(table.requiresReview),
+  index('idx_ai_decisions_date').on(table.createdAt),
 ]);
