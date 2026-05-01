@@ -81,58 +81,18 @@ export const products = sqliteTable('products', {
   index('idx_products_cabys').on(table.cabysCode),
 ]);
 
-export const customers = sqliteTable('customers', {
-  id: text('id').primaryKey(),
-  // TIPOS DE DOCUMENTO COSTA RICA
-  documentType: text('document_type', { 
-    enum: ['cedula_fisica', 'cedula_juridica', 'dimex', 'nite', 'pasaporte'] 
-  }).default('cedula_fisica'),
-  documentNumber: text('document_number').unique().notNull(),
-  name: text('name').notNull(),
-  tradeName: text('trade_name'), // Nombre comercial (Hacienda)
-  email: text('email'),
-  phone: text('phone'),
-  address: text('address'),
-  birthDate: integer('birth_date', { mode: 'number' }), // Epoch 13
-  notes: text('notes'),
-  creditLimit: real('credit_limit').default(0),
-  currentBalance: real('current_balance').default(0),
-  creditDays: integer('credit_days').default(0), // Plazo de crédito en días
-  loyaltyPoints: integer('loyalty_points').default(0),
-  // TIPO DE CONTACTO: customer, supplier, both
-  contactType: text('contact_type', { enum: ['customer', 'supplier', 'both'] }).default('customer'),
-  active: integer('active').default(1),
-  // Epoch 13 - NIIF compliant
-  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-}, (table) => [
-  index('idx_customers_document').on(table.documentNumber),
-  index('idx_customers_type').on(table.contactType),
-]);
-
-export const suppliers = sqliteTable('suppliers', {
-  id: text('id').primaryKey(),
-  documentNumber: text('document_number').unique().notNull(),
-  name: text('name').notNull(),
-  contactName: text('contact_name'),
-  email: text('email'),
-  phone: text('phone'),
-  address: text('address'),
-  paymentTerms: text('payment_terms'),
-  active: integer('active').default(1),
-  // Epoch 13 - NIIF compliant
-  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-});
-
 // ============================================
 // TABLAS DE TRANSACCIONES
+// ============================================
+// NOTA: Las tablas customers y suppliers han sido reemplazadas por contacts
+// para unificar la gestión de clientes y proveedores en una sola tabla.
 // ============================================
 
 export const sales = sqliteTable('sales', {
   id: text('id').primaryKey(),
   saleNumber: text('sale_number').unique().notNull(),
   branchId: text('branch_id').references(() => branches.id),
-  customerId: text('customer_id').references(() => customers.id),
+  contactId: text('contact_id').references(() => contacts.id),
   userId: text('user_id').references(() => users.id),
   subtotal: real('subtotal').notNull(),
   discount: real('discount').default(0),
@@ -197,7 +157,7 @@ export const inventoryMovements = sqliteTable('inventory_movements', {
 export const purchases = sqliteTable('purchases', {
   id: text('id').primaryKey(),
   purchaseNumber: text('purchase_number').unique().notNull(),
-  supplierId: text('supplier_id').references(() => suppliers.id),
+  contactId: text('contact_id').references(() => contacts.id),
   branchId: text('branch_id').references(() => branches.id),
   subtotal: real('subtotal').notNull(),
   discount: real('discount').default(0),
@@ -228,42 +188,42 @@ export const purchaseItems = sqliteTable('purchase_items', {
 
 export const customerInteractions = sqliteTable('customer_interactions', {
   id: text('id').primaryKey(),
-  customerId: text('customer_id').references(() => customers.id),
+  contactId: text('contact_id').references(() => contacts.id),
   interactionType: text('interaction_type', { enum: ['call', 'email', 'visit', 'note', 'complaint', 'suggestion'] }),
   description: text('description').notNull(),
-  followUpDate: text('follow_up_date'),
+  followUpDate: integer('follow_up_date', { mode: 'number' }),
   resolved: integer('resolved').default(0),
   userId: text('user_id').references(() => users.id),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const loyaltyTransactions = sqliteTable('loyalty_transactions', {
   id: text('id').primaryKey(),
-  customerId: text('customer_id').references(() => customers.id),
+  contactId: text('contact_id').references(() => contacts.id),
   transactionType: text('transaction_type', { enum: ['earn', 'redeem', 'adjustment', 'expire'] }),
   points: integer('points').notNull(),
   balanceAfter: integer('balance_after').notNull(),
   referenceType: text('reference_type'),
   referenceId: text('reference_id'),
   description: text('description'),
-  expiresAt: text('expires_at'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  expiresAt: integer('expires_at', { mode: 'number' }),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const credits = sqliteTable('credits', {
   id: text('id').primaryKey(),
-  customerId: text('customer_id').references(() => customers.id),
+  contactId: text('contact_id').references(() => contacts.id),
   saleId: text('sale_id').references(() => sales.id),
   amount: real('amount').notNull(),
   paidAmount: real('paid_amount').default(0),
   remainingAmount: real('remaining_amount').notNull(),
-  dueDate: text('due_date'),
+  dueDate: integer('due_date', { mode: 'number' }),
   status: text('status', { enum: ['active', 'paid', 'overdue', 'cancelled'] }).default('active'),
   notes: text('notes'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_credits_customer').on(table.customerId),
+  index('idx_credits_contact').on(table.contactId),
   index('idx_credits_status').on(table.status),
 ]);
 
@@ -274,7 +234,7 @@ export const creditPayments = sqliteTable('credit_payments', {
   paymentMethod: text('payment_method'),
   notes: text('notes'),
   userId: text('user_id').references(() => users.id),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 // ============================================
@@ -286,7 +246,7 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
   type: text('type').default('string'),
   description: text('description'),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const cashClosings = sqliteTable('cash_closings', {
@@ -299,9 +259,9 @@ export const cashClosings = sqliteTable('cash_closings', {
   difference: real('difference'),
   observations: text('observations'),
   status: text('status', { enum: ['open', 'closed', 'adjusted'] }).default('open'),
-  openedAt: text('opened_at').defaultCurrentTimestamp(),
-  closedAt: text('closed_at'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  openedAt: integer('opened_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  closedAt: integer('closed_at', { mode: 'number' }),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const auditLogs = sqliteTable('audit_logs', {
@@ -314,7 +274,7 @@ export const auditLogs = sqliteTable('audit_logs', {
   newValue: text('new_value'),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_audit_user').on(table.userId),
   index('idx_audit_created').on(table.createdAt),
@@ -339,8 +299,8 @@ export const organizations = sqliteTable('organizations', {
   taxRate: real('tax_rate').default(0.13),
   logoUrl: text('logo_url'),
   isActive: integer('is_active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const expenses = sqliteTable('expenses', {
@@ -353,7 +313,7 @@ export const expenses = sqliteTable('expenses', {
   taxRate: real('tax_rate').default(0.13),
   category: text('category').notNull(),
   description: text('description').notNull(),
-  date: text('date').notNull(),
+  date: integer('date', { mode: 'number' }).notNull().$defaultFn(() => Date.now()),
   paymentMethod: text('payment_method', {
     enum: ['cash', 'card', 'transfer', 'sinpe', 'credit']
   }).notNull(),
@@ -361,8 +321,8 @@ export const expenses = sqliteTable('expenses', {
   haciendaKey: text('hacienda_key'),
   status: text('status', { enum: ['pending', 'completed', 'cancelled'] }).default('completed'),
   createdBy: text('created_by').references(() => users.id),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_expenses_org').on(table.organizationId),
   index('idx_expenses_date').on(table.date),
@@ -384,9 +344,9 @@ export const paymentInstallments = sqliteTable('payment_installments', {
   amount: real('amount').notNull(),
   previousBalance: real('previous_balance').notNull(),
   newBalance: real('new_balance').notNull(),
-  // Fechas
-  paymentDate: text('payment_date').notNull(),
-  dueDate: text('due_date'), // Fecha de vencimiento del abono
+  // Fechas - Epoch 13
+  paymentDate: integer('payment_date', { mode: 'number' }).notNull().$defaultFn(() => Date.now()),
+  dueDate: integer('due_date', { mode: 'number' }), // Fecha de vencimiento del abono
   // Método de pago
   paymentMethod: text('payment_method', { 
     enum: ['cash', 'card', 'transfer', 'sinpe', 'check', 'deposit'] 
@@ -399,7 +359,7 @@ export const paymentInstallments = sqliteTable('payment_installments', {
   notes: text('notes'),
   // Usuario que registró
   createdBy: text('created_by').references(() => users.id),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_installments_ref').on(table.referenceId, table.referenceType),
   index('idx_installments_date').on(table.paymentDate),
@@ -442,8 +402,8 @@ export const contacts = sqliteTable('contacts', {
   loyaltyPoints: integer('loyalty_points').default(0),
   // ESTADO
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_contacts_org').on(table.organizationId),
   index('idx_contacts_type').on(table.contactType),
@@ -462,8 +422,8 @@ export const organizationSettings = sqliteTable('organization_settings', {
   settingValue: text('setting_value').notNull(), // JSON string para valores complejos
   type: text('type', { enum: ['string', 'number', 'boolean', 'json'] }).default('string'),
   description: text('description'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_org_settings_org').on(table.organizationId),
   index('idx_org_settings_key').on(table.settingKey),
