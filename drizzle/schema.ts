@@ -1,6 +1,13 @@
 import { sqliteTable, text, real, integer, index } from 'drizzle-orm/sqlite-core';
 
 // ============================================
+// UTILIDADES PARA FECHAS EPOCH 13
+// ============================================
+// Todas las fechas se almacenan como INTEGER (Epoch 13 - milisegundos)
+// Conforme a estándares ISO 8601 y NIIF/IFRS
+// ============================================
+
+// ============================================
 // TABLAS PRINCIPALES
 // ============================================
 
@@ -11,8 +18,9 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['admin', 'manager', 'cashier'] }).default('cashier'),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_users_username').on(table.username),
   index('idx_users_email').on(table.email),
