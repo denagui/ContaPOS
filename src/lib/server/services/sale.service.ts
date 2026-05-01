@@ -1,8 +1,13 @@
 import { eq, desc, and, sql, sum } from 'drizzle-orm';
 import type { Database } from '$lib/server/db';
-import { sales, saleItems, products, customers, organizations } from '$lib/server/db';
+import { sales, saleItems, products, contacts, organizations, inventoryMovements } from '$lib/server/db';
 import { generateId } from 'oslo';
 import { generateHaciendaKey } from '$lib/server/utils/hacienda-key';
+import {
+  createBillingOrchestrator,
+  type ElectronicInvoice,
+  type InvoiceItem,
+} from './billing';
 
 export interface SaleItemDTO {
   productId: string;
@@ -147,16 +152,24 @@ export class SaleService {
         }
       }
 
-      // 3. Actualizar puntos de lealtad si hay cliente
+      // 3. Actualizar puntos de lealtad si hay cliente (usando contacts en lugar de customers)
       if (data.customerId) {
         const pointsEarned = Math.floor(totalAmount);
         await this.db
-          .update(customers)
+          .update(contacts)
           .set({
-            loyaltyPoints: sql`${customers.loyaltyPoints} + ${pointsEarned}`,
-            updatedAt: now,
+            loyaltyPoints: sql`${contacts.loyaltyPoints} + ${pointsEarned}`,
+            updatedAt: Date.now(),
           })
-          .where(eq(customers.id, data.customerId));
+          .where(eq(contacts.id, data.customerId));
+      }
+
+      // 4. Procesar facturación electrónica si está configurada
+      try {
+        await this.processElectronicBilling(saleId, organizationId);
+      } catch (billingError) {
+        console.error('[SaleService] Error processing billing:', billingError);
+        // No lanzar el error para no bloquear la venta, pero registrar el problema
       }
 
       return await this.getById(saleId);
@@ -248,7 +261,7 @@ export class SaleService {
       throw new Error('La venta ya está cancelada');
     }
 
-    const now = new Date().toISOString();
+    const now = Date.now(); // Epoch 13
 
     // Marcar como cancelada
     await this.db
@@ -259,6 +272,24 @@ export class SaleService {
         updatedAt: now,
       })
       .where(eq(sales.id, saleId));
+
+    // Si tiene clave de hacienda, cancelar el documento electrónico
+    if (sale.haciendaKey) {
+      try {
+        const org = await this.db
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, sale.branchId)) // Asumiendo que branchId tiene org context
+          .limit(1);
+        
+        if (org.length) {
+          const orchestrator = createBillingOrchestrator(this.db, org[0].id);
+          await orchestrator.cancelDocument(sale.haciendaKey!, reason);
+        }
+      } catch (billingError) {
+        console.error('[SaleService] Error cancelling electronic document:', billingError);
+      }
+    }
 
     // Revertir stock
     for (const item of sale.items) {
@@ -275,9 +306,166 @@ export class SaleService {
           .update(products)
           .set({ stockQuantity: newStock })
           .where(eq(products.id, item.productId));
+          
+        // Registrar movimiento de inventario
+        await this.db.insert(inventoryMovements).values({
+          id: generateId(15),
+          productId: item.productId,
+          movementType: 'return',
+          quantity: item.quantity,
+          previousStock: product[0].stockQuantity,
+          newStock,
+          referenceType: 'sale',
+          referenceId: saleId,
+          userId,
+          notes: `Devolución por cancelación de venta ${sale.saleNumber}`,
+          createdAt: now,
+        });
       }
     }
 
     return true;
+  }
+
+  /**
+   * Procesar facturación electrónica después de crear una venta
+   */
+  private async processElectronicBilling(saleId: string, organizationId: string): Promise<void> {
+    const sale = await this.getById(saleId);
+    if (!sale) return;
+
+    // Obtener datos de la organización
+    const orgData = await this.db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+
+    if (!orgData.length || !orgData[0].taxId) {
+      console.log('[SaleService] Organization not configured for billing');
+      return;
+    }
+
+    const org = orgData[0];
+
+    // Obtener datos del cliente si existe
+    let receiverData = undefined;
+    if (sale.contactId) {
+      const contactData = await this.db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.id, sale.contactId))
+        .limit(1);
+
+      if (contactData.length) {
+        const contact = contactData[0];
+        receiverData = {
+          taxId: contact.documentNumber || undefined,
+          name: contact.name,
+          email: contact.email || undefined,
+          phone: contact.phone || undefined,
+          address: contact.address ? {
+            line1: contact.address,
+            city: contact.city || '',
+            province: contact.province || '',
+          } : undefined,
+        };
+      }
+    }
+
+    // Obtener items con detalles de productos
+    const items = await this.db
+      .select({
+        saleItem: saleItems,
+        product: products,
+      })
+      .from(saleItems)
+      .leftJoin(products, eq(saleItems.productId, products.id))
+      .where(eq(saleItems.saleId, saleId));
+
+    // Construir invoice para el sistema de facturación
+    const invoice: ElectronicInvoice = {
+      documentType: '04', // Ticket de Venta (cambiar a '01' para factura completa)
+      issueDate: sale.createdAt,
+      emitter: {
+        taxId: org.taxId!,
+        name: org.legalName || org.name,
+        commercialName: org.name,
+        address: {
+          line1: org.address || '',
+          city: '', // Se podría agregar campo city a organizations
+          province: '', // Se podría agregar campo province a organizations
+        },
+        email: org.email || undefined,
+        phone: org.phone || undefined,
+      },
+      receiver: receiverData,
+      currency: 'CRC',
+      items: items.map((item, index) => ({
+        lineNumber: index + 1,
+        cabysCode: item.product?.cabysCode || '0000000000000', // Default si no tiene
+        quantity: item.saleItem.quantity,
+        unitOfMeasure: 'Ni', // Unidad nacional
+        unitPrice: item.saleItem.unitPrice,
+        unitPriceTotal: item.saleItem.unitPrice * item.saleItem.quantity,
+        discount: item.saleItem.discount ? {
+          amount: item.saleItem.discount,
+        } : undefined,
+        taxType: (item.product?.taxType as '0' | '4' | '8' | '13') || '13',
+        taxAmount: item.saleItem.taxAmount,
+        totalAmount: item.saleItem.totalAmount,
+        description: item.product?.name || 'Producto sin nombre',
+      })),
+      subtotal: sale.subtotal,
+      totalDiscount: sale.discount,
+      taxSummary: this.buildTaxSummary(items),
+      totalAmount: sale.totalAmount,
+      paymentMethod: sale.paymentMethod as any,
+      branchId: sale.branchId,
+      saleId,
+    };
+
+    // Enviar al orquestador de facturación
+    const orchestrator = createBillingOrchestrator(this.db, organizationId);
+    const result = await orchestrator.sendInvoice(invoice);
+
+    if (result.success) {
+      // Actualizar la venta con los datos de facturación
+      await this.db
+        .update(sales)
+        .set({
+          haciendaKey: result.documentKey,
+          haciendaStatus: 'sent',
+          updatedAt: Date.now(),
+        })
+        .where(eq(sales.id, saleId));
+
+      console.log(`[SaleService] Invoice sent successfully: ${result.documentKey}`);
+    } else {
+      console.error(`[SaleService] Failed to send invoice: ${result.message}`);
+    }
+  }
+
+  /**
+   * Construir resumen de impuestos por tipo
+   */
+  private buildTaxSummary(items: Array<{ saleItem: any; product: any }>) {
+    const taxMap = new Map<string, { taxableAmount: number; taxAmount: number }>();
+
+    for (const item of items) {
+      const taxType = item.product?.taxType || '13';
+      const existing = taxMap.get(taxType) || { taxableAmount: 0, taxAmount: 0 };
+      
+      taxMap.set(taxType, {
+        taxableAmount: existing.taxableAmount + (item.saleItem.unitPrice * item.saleItem.quantity - (item.saleItem.discount || 0)),
+        taxAmount: existing.taxAmount + item.saleItem.taxAmount,
+      });
+    }
+
+    return Array.from(taxMap.entries()).map(([taxType, amounts]) => ({
+      taxType: taxType as '0' | '4' | '8' | '13',
+      taxableAmount: amounts.taxableAmount,
+      taxAmount: amounts.taxAmount,
+    }));
   }
 }
