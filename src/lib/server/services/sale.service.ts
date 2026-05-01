@@ -1,7 +1,8 @@
 import { eq, desc, and, sql, sum } from 'drizzle-orm';
 import type { Database } from '$lib/server/db';
-import { sales, saleItems, products, customers } from '$lib/server/db';
+import { sales, saleItems, products, customers, organizations } from '$lib/server/db';
 import { generateId } from 'oslo';
+import { generateHaciendaKey } from '$lib/server/utils/hacienda-key';
 
 export interface SaleItemDTO {
   productId: string;
@@ -22,17 +23,27 @@ export interface CreateSaleDTO {
 export class SaleService {
   constructor(private db: Database) {}
 
-  async create(data: CreateSaleDTO, userId: string, taxRate: number = 0.13) {
+  async create(data: CreateSaleDTO, userId: string, organizationId: string) {
     const saleId = generateId(15);
     const saleNumber = await this.generateSaleNumber();
     const now = new Date().toISOString();
 
-    // Calcular totales
+    // Calcular totales con IVA flexible por producto
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
 
-    const itemsWithTotals = data.items.map(item => {
+    const itemsWithTotals = await Promise.all(data.items.map(async (item) => {
+      // Obtener el producto para saber su tipo de IVA
+      const productData = await this.db
+        .select({ taxType: products.taxType, name: products.name })
+        .from(products)
+        .where(eq(products.id, item.productId))
+        .limit(1);
+
+      const taxType = productData[0]?.taxType || '13';
+      const taxRate = parseInt(taxType) / 100; // 0, 0.04, 0.08, 0.13
+
       const itemSubtotal = item.quantity * item.unitPrice;
       const itemDiscount = item.discount || 0;
       const itemTaxableAmount = itemSubtotal - itemDiscount;
@@ -48,14 +59,38 @@ export class SaleService {
         discount: itemDiscount,
         taxAmount: itemTax,
         totalAmount: itemTotal,
+        taxType,
       };
-    });
+    }));
 
     const totalAmount = subtotal - totalDiscount + totalTax;
     const amountPaid = data.amountPaid || totalAmount;
     const changeAmount = amountPaid - totalAmount;
 
-    // Iniciar transacción (usando exec para múltiples queries)
+    // Generar Clave Hacienda
+    let haciendaKey: string | null = null;
+    try {
+      const org = await this.db
+        .select({ taxId: organizations.taxId })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .limit(1);
+
+      if (org[0]?.taxId) {
+        haciendaKey = generateHaciendaKey({
+          timestamp: new Date(),
+          sucursal: '001',
+          terminal: '00001',
+          tipoComprobante: '01', // 01 = Factura Electrónica
+          consecutivo: parseInt(saleNumber.replace(/\D/g, '').slice(-8)) || Math.floor(Math.random() * 99999999),
+          cedulaEmisor: org[0].taxId,
+        });
+      }
+    } catch (e) {
+      console.error('Error generando clave Hacienda:', e);
+    }
+
+    // Iniciar transacción
     try {
       // 1. Crear la venta
       await this.db.insert(sales).values({
@@ -73,6 +108,8 @@ export class SaleService {
         amountPaid,
         changeAmount,
         notes: data.notes,
+        haciendaKey,
+        haciendaStatus: haciendaKey ? 'sent' : 'pending',
         createdAt: now,
         updatedAt: now,
       });

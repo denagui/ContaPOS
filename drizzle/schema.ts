@@ -45,6 +45,8 @@ export const products = sqliteTable('products', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: text('category_id').references(() => categories.id),
+  // TIPO DE PRODUCTO: product, service, fixed_expense
+  productType: text('product_type', { enum: ['product', 'service', 'fixed_expense'] }).default('product'),
   costPrice: real('cost_price').default(0),
   salePrice: real('sale_price').notNull(),
   stockQuantity: integer('stock_quantity').default(0),
@@ -52,7 +54,11 @@ export const products = sqliteTable('products', {
   maxStock: integer('max_stock'),
   unit: text('unit').default('unit'),
   imageUrl: text('image_url'),
+  // IVA FLEXIBLE: 0=exento, 4=4%, 8=8%, 13=13%
+  taxType: text('tax_type', { enum: ['0', '4', '8', '13'] }).default('13'),
   taxable: integer('taxable').default(1),
+  // CÓDIGO CABYS PARA HACIENDA CR (13 dígitos)
+  cabysCode: text('cabys_code'),
   active: integer('active').default(1),
   createdAt: text('created_at').defaultCurrentTimestamp(),
   updatedAt: text('updated_at').defaultCurrentTimestamp(),
@@ -61,13 +67,18 @@ export const products = sqliteTable('products', {
   index('idx_products_sku').on(table.sku),
   index('idx_products_category').on(table.categoryId),
   index('idx_products_active').on(table.active),
+  index('idx_products_cabys').on(table.cabysCode),
 ]);
 
 export const customers = sqliteTable('customers', {
   id: text('id').primaryKey(),
-  documentType: text('document_type', { enum: ['DNI', 'CPF', 'CE', 'RUC'] }).default('DNI'),
+  // TIPOS DE DOCUMENTO COSTA RICA
+  documentType: text('document_type', { 
+    enum: ['cedula_fisica', 'cedula_juridica', 'dimex', 'nite', 'pasaporte'] 
+  }).default('cedula_fisica'),
   documentNumber: text('document_number').unique().notNull(),
   name: text('name').notNull(),
+  tradeName: text('trade_name'), // Nombre comercial (Hacienda)
   email: text('email'),
   phone: text('phone'),
   address: text('address'),
@@ -75,12 +86,16 @@ export const customers = sqliteTable('customers', {
   notes: text('notes'),
   creditLimit: real('credit_limit').default(0),
   currentBalance: real('current_balance').default(0),
+  creditDays: integer('credit_days').default(0), // Plazo de crédito en días
   loyaltyPoints: integer('loyalty_points').default(0),
+  // TIPO DE CONTACTO: customer, supplier, both
+  contactType: text('contact_type', { enum: ['customer', 'supplier', 'both'] }).default('customer'),
   active: integer('active').default(1),
   createdAt: text('created_at').defaultCurrentTimestamp(),
   updatedAt: text('updated_at').defaultCurrentTimestamp(),
 }, (table) => [
   index('idx_customers_document').on(table.documentNumber),
+  index('idx_customers_type').on(table.contactType),
 ]);
 
 export const suppliers = sqliteTable('suppliers', {
@@ -116,6 +131,11 @@ export const sales = sqliteTable('sales', {
   changeAmount: real('change_amount').default(0),
   notes: text('notes'),
   cancelled: integer('cancelled').default(0),
+  // CLAVE HACIENDA PARA FACTURACIÓN ELECTRÓNICA (50 dígitos)
+  haciendaKey: text('hacienda_key'),
+  haciendaStatus: text('hacienda_status', { 
+    enum: ['pending', 'sent', 'accepted', 'rejected'] 
+  }).default('pending'),
   createdAt: text('created_at').defaultCurrentTimestamp(),
   updatedAt: text('updated_at').defaultCurrentTimestamp(),
 }, (table) => [
@@ -123,6 +143,7 @@ export const sales = sqliteTable('sales', {
   index('idx_sales_user').on(table.userId),
   index('idx_sales_branch').on(table.branchId),
   index('idx_sales_created_at').on(table.createdAt),
+  index('idx_sales_hacienda').on(table.haciendaKey),
 ]);
 
 export const saleItems = sqliteTable('sale_items', {
@@ -328,4 +349,41 @@ export const expenses = sqliteTable('expenses', {
   index('idx_expenses_org').on(table.organizationId),
   index('idx_expenses_date').on(table.date),
   index('idx_expenses_category').on(table.category),
+]);
+
+// ============================================
+// TABLA DE ABONOS/PAGOS PARA CRÉDITOS (CxC/CxP)
+// ============================================
+
+export const paymentInstallments = sqliteTable('payment_installments', {
+  id: text('id').primaryKey(),
+  // Referencia a la transacción (venta o compra)
+  referenceType: text('reference_type', { enum: ['sale', 'purchase', 'credit'] }).notNull(),
+  referenceId: text('reference_id').notNull(),
+  // Número de abono
+  installmentNumber: integer('installment_number').default(1),
+  // Montos
+  amount: real('amount').notNull(),
+  previousBalance: real('previous_balance').notNull(),
+  newBalance: real('new_balance').notNull(),
+  // Fechas
+  paymentDate: text('payment_date').notNull(),
+  dueDate: text('due_date'), // Fecha de vencimiento del abono
+  // Método de pago
+  paymentMethod: text('payment_method', { 
+    enum: ['cash', 'card', 'transfer', 'sinpe', 'check', 'deposit'] 
+  }).notNull(),
+  // Referencia del pago
+  referenceNumber: text('reference_number'), // Número de cheque, transferencia, etc.
+  // Comprobante
+  receiptNumber: text('receipt_number'),
+  // Notas
+  notes: text('notes'),
+  // Usuario que registró
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_installments_ref').on(table.referenceId, table.referenceType),
+  index('idx_installments_date').on(table.paymentDate),
+  index('idx_installments_created').on(table.createdAt),
 ]);
