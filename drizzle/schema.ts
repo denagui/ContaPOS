@@ -31,10 +31,11 @@ export const branches = sqliteTable('branches', {
   name: text('name').notNull(),
   address: text('address'),
   phone: text('phone'),
-  currency: text('currency').default('USD'),
+  currency: text('currency').default('USD'), // ISO 4217
   taxRate: real('tax_rate').default(0.13),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const categories = sqliteTable('categories', {
@@ -43,7 +44,8 @@ export const categories = sqliteTable('categories', {
   description: text('description'),
   parentId: text('parent_id').references(() => categories.id),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const products = sqliteTable('products', {
@@ -68,8 +70,9 @@ export const products = sqliteTable('products', {
   // CÓDIGO CABYS PARA HACIENDA CR (13 dígitos)
   cabysCode: text('cabys_code'),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_products_barcode').on(table.barcode),
   index('idx_products_sku').on(table.sku),
@@ -90,7 +93,7 @@ export const customers = sqliteTable('customers', {
   email: text('email'),
   phone: text('phone'),
   address: text('address'),
-  birthDate: text('birth_date'),
+  birthDate: integer('birth_date', { mode: 'number' }), // Epoch 13
   notes: text('notes'),
   creditLimit: real('credit_limit').default(0),
   currentBalance: real('current_balance').default(0),
@@ -99,8 +102,9 @@ export const customers = sqliteTable('customers', {
   // TIPO DE CONTACTO: customer, supplier, both
   contactType: text('contact_type', { enum: ['customer', 'supplier', 'both'] }).default('customer'),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_customers_document').on(table.documentNumber),
   index('idx_customers_type').on(table.contactType),
@@ -116,7 +120,8 @@ export const suppliers = sqliteTable('suppliers', {
   address: text('address'),
   paymentTerms: text('payment_terms'),
   active: integer('active').default(1),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 // ============================================
@@ -144,8 +149,9 @@ export const sales = sqliteTable('sales', {
   haciendaStatus: text('hacienda_status', { 
     enum: ['pending', 'sent', 'accepted', 'rejected'] 
   }).default('pending'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_sales_customer').on(table.customerId),
   index('idx_sales_user').on(table.userId),
@@ -163,7 +169,8 @@ export const saleItems = sqliteTable('sale_items', {
   discount: real('discount').default(0),
   taxAmount: real('tax_amount').notNull(),
   totalAmount: real('total_amount').notNull(),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_sale_items_sale').on(table.saleId),
   index('idx_sale_items_product').on(table.productId),
@@ -180,7 +187,8 @@ export const inventoryMovements = sqliteTable('inventory_movements', {
   referenceId: text('reference_id'),
   userId: text('user_id').references(() => users.id),
   notes: text('notes'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
   index('idx_inventory_product').on(table.productId),
   index('idx_inventory_created').on(table.createdAt),
@@ -198,8 +206,9 @@ export const purchases = sqliteTable('purchases', {
   paymentStatus: text('payment_status', { enum: ['paid', 'pending', 'partial'] }).default('pending'),
   received: integer('received').default(0),
   notes: text('notes'),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
-  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 export const purchaseItems = sqliteTable('purchase_items', {
@@ -209,7 +218,8 @@ export const purchaseItems = sqliteTable('purchase_items', {
   quantity: real('quantity').notNull(),
   unitCost: real('unit_cost').notNull(),
   totalAmount: real('total_amount').notNull(),
-  createdAt: text('created_at').defaultCurrentTimestamp(),
+  // Epoch 13 - NIIF compliant
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
 
 // ============================================
