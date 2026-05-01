@@ -17,15 +17,69 @@ export const users = sqliteTable('users', {
   username: text('username').unique().notNull(),
   email: text('email').unique().notNull(),
   passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ['admin', 'manager', 'cashier'] }).default('cashier'),
   active: integer('active').default(1),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  lastLoginAt: integer('last_login_at', { mode: 'number' }),
 }, (table) => [
   index('idx_users_company').on(table.companyId),
   index('idx_users_username').on(table.username),
   index('idx_users_email').on(table.email),
+]);
+
+// ============================================
+// SISTEMA RBAC (ROLE-BASED ACCESS CONTROL)
+// ============================================
+// Roles y permisos granulares para control de acceso
+// ============================================
+
+export const roles = sqliteTable('roles', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
+  name: text('name').notNull(), // Ej: 'admin', 'manager', 'cashier', 'accountant'
+  description: text('description'),
+  isSystem: integer('is_system').default(0), // Roles del sistema no se pueden borrar
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_roles_company').on(table.companyId),
+  index('idx_roles_name').on(table.name),
+]);
+
+export const permissions = sqliteTable('permissions', {
+  id: text('id').primaryKey(),
+  name: text('name').unique().notNull(), // Ej: 'sales.create', 'sales.delete', 'reports.view'
+  description: text('description'),
+  category: text('category').notNull(), // Ej: 'sales', 'inventory', 'accounting', 'settings'
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_permissions_category').on(table.category),
+]);
+
+export const rolePermissions = sqliteTable('role_permissions', {
+  id: text('id').primaryKey(),
+  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  permissionId: text('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
+  grantedBy: text('granted_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_role_permissions_role').on(table.roleId),
+  index('idx_role_permissions_permission').on(table.permissionId),
+  // Unique constraint para evitar duplicados
+]);
+
+export const userRoles = sqliteTable('user_roles', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  assignedBy: text('assigned_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  expiresAt: integer('expires_at', { mode: 'number' }), // Para roles temporales
+}, (table) => [
+  index('idx_user_roles_user').on(table.userId),
+  index('idx_user_roles_role').on(table.roleId),
+  // Unique constraint para evitar duplicados
 ]);
 
 export const branches = sqliteTable('branches', {
