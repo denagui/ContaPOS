@@ -176,6 +176,46 @@ export const sales = sqliteTable('sales', {
   haciendaStatus: text('hacienda_status', { 
     enum: ['pending', 'sent', 'accepted', 'rejected'] 
   }).default('pending'),
+  // DATOS HACIENDA 4.4 - TIPO DE COMPROBANTE
+  documentType: text('document_type', {
+    enum: [
+      '01', // Factura electrónica
+      '02', // Nota de débito
+      '03', // Nota de crédito
+      '04', // Tiquete electrónico
+      '05', // Confirmación de aceptación
+      '06', // Confirmación de rechazo
+      '07', // Nota de remisión
+      '08', // Factura electrónica de compra
+      '09'  // Factura electrónica de exportación
+    ]
+  }).default('01'),
+  // CONDICIÓN DE VENTA
+  saleCondition: text('sale_condition', {
+    enum: ['01', '02', '03'] // 01=Contado, 02=Crédito, 03=Consignación
+  }).default('01'),
+  creditTermDays: integer('credit_term_days').default(0), // Plazo crédito en días
+  // MEDIO DE PAGO (código Hacienda)
+  paymentMethodCode: text('payment_method_code', {
+    enum: [
+      '01', // Efectivo
+      '02', // Tarjeta
+      '03', // Cheque
+      '04', // Transferencia
+      '05', // Recaudado por terceros
+      '06', // SINPE móvil (NUEVO 4.4)
+      '07', // Plataformas digitales/PayPal (NUEVO 4.4)
+      '08'  // Depósito
+    ]
+  }).default('01'),
+  // REFERENCIA A DOCUMENTO ORIGINAL (para ND/NC)
+  referenceDocKey: text('reference_doc_key'), // Clave Hacienda doc referenciado
+  referenceDocDate: text('reference_doc_date'),
+  referenceDocType: text('reference_doc_type'),
+  // NUMERACIÓN Y CAE
+  consecutiveNumber: text('consecutive_number'), // Número consecutivo interno
+  cae: text('cae'), // Código de Autorización Especial
+  caeExpiration: text('cae_expiration'), // Fecha expiración CAE
   // ISO 42001: Explicación de decisiones automatizadas
   aiExplanation: text('ai_explanation'),
   confidenceScore: real('confidence_score'),
@@ -189,6 +229,7 @@ export const sales = sqliteTable('sales', {
   index('idx_sales_branch').on(table.branchId),
   index('idx_sales_created_at').on(table.createdAt),
   index('idx_sales_hacienda').on(table.haciendaKey),
+  index('idx_sales_document_type').on(table.documentType),
 ]);
 
 export const saleItems = sqliteTable('sale_items', {
@@ -200,6 +241,18 @@ export const saleItems = sqliteTable('sale_items', {
   discountCents: integer('discount_cents').default(0),
   taxAmountCents: integer('tax_amount_cents').notNull(),
   totalAmountCents: integer('total_amount_cents').notNull(),
+  // DATOS HACIENDA 4.4 - LÍNEAS DE COMPROBANTE
+  cabysCode: text('cabys_code'), // Código CABYS del producto (copia al momento de venta)
+  taxType: text('tax_type', { 
+    enum: ['01', '02', '03', '04', '05', '06', '07', '08'] 
+  }), // 01=General 13%, 02=Reducido 4%, 03=Reducido 8%, 04=Exento, etc.
+  taxRate: real('tax_rate'), // Tarifa específica aplicada
+  unitPriceWithoutTaxCents: integer('unit_price_without_tax_cents'), // Precio unitario sin IVA
+  discountAmountCents: integer('discount_amount_cents').default(0), // Monto descuento en céntimos
+  discountReason: text('discount_reason'), // Motivo del descuento
+  unitCode: text('unit_code', {
+    enum: ['Unid', 'kg', 'g', 'L', 'ml', 'm', 'cm', 'm2', 'm3', 'Otros']
+  }).default('Unid'), // Unidad de medida (código Hacienda)
   // ISO 42001: Trazabilidad de sugerencias de IA en items
   aiSuggestionId: text('ai_suggestion_id'),
   // Epoch 13 - NIIF compliant
@@ -207,6 +260,7 @@ export const saleItems = sqliteTable('sale_items', {
 }, (table) => [
   index('idx_sale_items_sale').on(table.saleId),
   index('idx_sale_items_product').on(table.productId),
+  index('idx_sale_items_cabys').on(table.cabysCode),
 ]);
 
 export const inventoryMovements = sqliteTable('inventory_movements', {
@@ -379,6 +433,18 @@ export const companies = sqliteTable('companies', {
   taxRate: real('tax_rate').default(0.13),
   logoUrl: text('logo_url'),
   isActive: integer('is_active').default(1),
+  // DATOS HACIENDA 4.4
+  nit: text('nit'), // Número de Identificación Tributaria (formato: 3-XXX-XXXXXX)
+  branchCode: text('branch_code').default('001'), // Sucursal/Taller/PV (3 dígitos)
+  terminalCode: text('terminal_code').default('00001'), // Terminal/Punto facturación (5 dígitos)
+  mainActivityCode: text('main_activity_code'), // Actividad económica principal
+  secondaryActivityCodes: text('secondary_activity_codes'), // JSON array: ["523202", "471101"]
+  taxpayerType: text('taxpayer_type', { 
+    enum: ['ordinary', 'large', 'special', 'franchise'] 
+  }).default('ordinary'),
+  ivaRegime: text('iva_regime', { 
+    enum: ['general', 'simplified', 'exempt', 'special'] 
+  }).default('general'),
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 });
@@ -523,17 +589,33 @@ export const contacts = sqliteTable('contacts', {
   email: text('email'),
   phone: text('phone'),
   mobile: text('mobile'),
-  // DOCUMENTOS TRIBUTARIOS COSTA RICA
+  // DOCUMENTOS TRIBUTARIOS COSTA RICA (Anexo 4.4)
   documentType: text('document_type', { 
-    enum: ['cedula_fisica', 'cedula_juridica', 'dimex', 'nite', 'pasaporte'] 
+    enum: [
+      'cedula_fisica',           // Física nacional
+      'cedula_juridica',         // Jurídica nacional
+      'dimex',                   // DIMEX (extranjero residente)
+      'nite',                    // NITE (extranjero no residente)
+      'pasaporte',               // Pasaporte
+      'extranjero_no_domiciliado', // NUEVO 4.4
+      'no_contribuyente'         // NUEVO 4.4
+    ] 
   }).default('cedula_fisica'),
   documentNumber: text('document_number'),
-  // DIRECCIÓN COMPLETA
+  // DIRECCIÓN COMPLETA CON CÓDIGOS HACIENDA
+  provinceCode: text('province_code', { enum: ['1', '2', '3', '4', '5', '6', '7'] }), // 1-7 provincias CR
+  cantonCode: text('canton_code'), // 3 dígitos
+  districtCode: text('district_code'), // 3 dígitos
   province: text('province'),
   canton: text('canton'),
   district: text('district'),
+  neighborhood: text('neighborhood'), // Barrio/otras señas
   address: text('address'),
   postalCode: text('postal_code'),
+  // ACTIVIDAD ECONÓMICA HACIENDA
+  activityCode: text('activity_code'), // Código 6 dígitos (ej: "011101")
+  // MÚLTIPLES CORREOS (JSON array, hasta 4 correos Hacienda 4.4)
+  emails: text('emails'), // JSON: ["email1@empresa.com", "email2@empresa.com"]
   // CRÉDITO
   creditLimit: real('credit_limit').default(0),
   currentBalance: real('current_balance').default(0),
@@ -551,6 +633,8 @@ export const contacts = sqliteTable('contacts', {
   index('idx_contacts_type').on(table.contactType),
   index('idx_contacts_document').on(table.documentNumber),
   index('idx_contacts_active').on(table.active),
+  index('idx_contacts_activity').on(table.activityCode),
+  index('idx_contacts_document_type').on(table.documentType),
 ]);
 
 // ============================================
@@ -1001,3 +1085,131 @@ export type NewReconciliationBatch = InferInsertModel<typeof reconciliationBatch
 
 export type ReconciliationItem = InferSelectModel<typeof reconciliationItems>;
 export type NewReconciliationItem = InferInsertModel<typeof reconciliationItems>;
+
+// ============================================
+// HACIENDA 2026 - FACTURACIÓN ELECTRÓNICA 4.4
+// ============================================
+// Catálogos de referencia y tablas para normativa Hacienda CR
+// ============================================
+
+// CATÁLOGO: Códigos de Actividad Económica (Ministerio de Hacienda)
+export const activityCodes = sqliteTable('activity_codes', {
+  code: text('code').primaryKey(), // 6 dígitos (ej: "011101")
+  description: text('description').notNull(),
+  section: text('section'), // Sección del CIIU
+  division: text('division'),
+  group: text('group'),
+  class: text('class'),
+  isActive: integer('is_active').default(1),
+});
+
+// CATÁLOGO: Instituciones Exoneradoras
+export const institutionCodes = sqliteTable('institution_codes', {
+  code: text('code').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type', {
+    enum: ['ministry', 'autonomous', 'municipality', 'other']
+  }),
+  isActive: integer('is_active').default(1),
+});
+
+// EXONERACIONES FISCALES (por comprobante)
+export const taxExemptions = sqliteTable('tax_exemptions', {
+  id: text('id').primaryKey(),
+  saleId: text('sale_id').references(() => sales.id),
+  // Institución que otorga la exoneración
+  institutionCode: text('institution_code').notNull(),
+  institutionName: text('institution_name').notNull(),
+  // Porcentaje de exoneración (0-100)
+  exemptionPercentage: real('exemption_percentage').notNull(),
+  // Artículo legal que respalda
+  legalArticle: text('legal_article').notNull(),
+  // Número y fecha de autorización
+  authorizationNumber: text('authorization_number'),
+  authorizationDate: text('authorization_date'),
+  // Monto exonerado en céntimos
+  exemptedAmountCents: integer('exempted_amount_cents').notNull(),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_exemptions_sale').on(table.saleId),
+  index('idx_exemptions_institution').on(table.institutionCode),
+]);
+
+// LOG DE COMUNICACIÓN CON API DE HACIENDA
+export const haciendaApiLog = sqliteTable('hacienda_api_log', {
+  id: text('id').primaryKey(),
+  saleId: text('sale_id').references(() => sales.id),
+  // Tipo de operación
+  operationType: text('operation_type', {
+    enum: ['send', 'query', 'cancel', 'accept', 'reject']
+  }),
+  // Estado de la respuesta
+  status: text('status', {
+    enum: ['pending', 'processing', 'accepted', 'rejected', 'error']
+  }),
+  // Clave del comprobante
+  documentKey: text('document_key'),
+  // XML enviado y recibido
+  requestXml: text('request_xml'),
+  responseXml: text('response_xml'),
+  responseCode: text('response_code'),
+  responseMessage: text('response_message'),
+  // Detalles de error
+  errorDetails: text('error_details'),
+  // Fechas
+  sentAt: text('sent_at'),
+  respondedAt: text('responded_at'),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_api_log_sale').on(table.saleId),
+  index('idx_api_log_key').on(table.documentKey),
+  index('idx_api_log_status').on(table.status),
+]);
+
+// AUTORIZACIONES ESPECIALES (CAE - Código de Autorización Especial)
+export const caeAuthorizations = sqliteTable('cae_authorizations', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id),
+  // Número de CAE
+  caeNumber: text('cae_number').notNull().unique(),
+  // Tipo de documento que autoriza
+  documentType: text('document_type', {
+    enum: ['01', '02', '03', '04', '08', '09']
+  }),
+  // Rango de numeración autorizado
+  startNumber: text('start_number').notNull(),
+  endNumber: text('end_number').notNull(),
+  // Fechas de vigencia
+  startDate: text('start_date').notNull(),
+  expirationDate: text('expiration_date').notNull(),
+  // Estado
+  status: text('status', {
+    enum: ['active', 'expired', 'cancelled', 'suspended']
+  }).default('active'),
+  // Último número usado
+  lastUsedNumber: text('last_used_number'),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_cae_company').on(table.companyId),
+  index('idx_cae_number').on(table.caeNumber),
+  index('idx_cae_status').on(table.status, table.expirationDate),
+]);
+
+// ============================================
+// TIPOS DRIZZLE PARA HACIENDA 2026
+// ============================================
+
+export type ActivityCode = InferSelectModel<typeof activityCodes>;
+export type NewActivityCode = InferInsertModel<typeof activityCodes>;
+
+export type InstitutionCode = InferSelectModel<typeof institutionCodes>;
+export type NewInstitutionCode = InferInsertModel<typeof institutionCodes>;
+
+export type TaxExemption = InferSelectModel<typeof taxExemptions>;
+export type NewTaxExemption = InferInsertModel<typeof taxExemptions>;
+
+export type HaciendaApiLog = InferSelectModel<typeof haciendaApiLog>;
+export type NewHaciendaApiLog = InferInsertModel<typeof haciendaApiLog>;
+
+export type CaeAuthorization = InferSelectModel<typeof caeAuthorizations>;
+export type NewCaeAuthorization = InferInsertModel<typeof caeAuthorizations>;
