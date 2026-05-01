@@ -1,105 +1,65 @@
-interface WhatsAppTicketData {
-  businessName: string;
-  receiptNumber: string;
-  total: number;
-  items: Array<{
-    description: string;
-    quantity: number;
-    total: number;
-  }>;
-  customerPhone?: string;
+interface WhatsAppMessageOptions {
+phone: string; // Formato: 50688888888 (código país + número sin espacios)
+organizationName: string;
+ticketNumber: string;
+total: number;
+items: Array<{
+name: string;
+quantity: number;
+total: number;
+}>;
 }
 
-/**
- * Genera un enlace de WhatsApp con el ticket formateado
- * Compatible con WhatsApp Business API y click-to-chat
- */
-export function generateWhatsAppLink(data: WhatsAppTicketData, customerPhone?: string): string {
-  const basePhone = customerPhone || '';
-  
-  // Formatear mensaje para WhatsApp
-  const message = `
-*${data.businessName}*
-🧾 Ticket #${data.receiptNumber}
-━━━━━━━━━━━━━━━━
-${data.items.map(item => 
-    `• ${item.quantity} x ${item.description}\n  ₡${item.total.toFixed(2)}`
-  ).join('\n')}
-━━━━━━━━━━━━━━━━
-*TOTAL: ₡${data.total.toFixed(2)}*
-━━━━━━━━━━━━━━━━
-¡Gracias por su compra!
-  `.trim();
+export function generateWhatsAppLink(options: WhatsAppMessageOptions): string {
+const { phone, organizationName, ticketNumber, total, items } = options;
 
-  // Codificar para URL
-  const encodedMessage = encodeURIComponent(message);
-  
-  // Si hay número de cliente, enviar directo. Si no, abrir chat para que elija contacto
-  if (basePhone) {
-    // Limpiar número (quitar +, espacios, guiones)
-    const cleanPhone = basePhone.replace(/[^0-9]/g, '');
-    return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
-  }
-  
-  // Sin número específico: abrir WhatsApp Web/App para seleccionar contacto
-  return `https://wa.me/?text=${encodedMessage}`;
+// Construir mensaje con formato
+let message = `*${organizationName}*\n`;
+message += `Ticket: ${ticketNumber}\n`;
+message += `----------------\n`;
+
+items.forEach(item => {
+message += `${item.quantity} x ${item.name} - ₡${item.total.toFixed(2)}\n`;
+});
+
+message += `----------------\n`;
+message += `*TOTAL: ₡${total.toFixed(2)}*\n`;
+message += `\nGracias por su compra! 🙏`;
+
+// Codificar para URL
+const encodedMessage = encodeURIComponent(message);
+
+return `https://wa.me/${phone}?text=${encodedMessage}`;
 }
 
-/**
- * Versión corta para SMS o sistemas con límite de caracteres
- */
-export function generateShortWhatsAppLink(data: WhatsAppTicketData, customerPhone?: string): string {
-  const message = `${data.businessName} - Ticket #${data.receiptNumber}. Total: ₡${data.total.toFixed(2)}. ¡Gracias!`;
-  const encodedMessage = encodeURIComponent(message);
-  
-  if (customerPhone) {
-    const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
-    return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
-  }
-  
-  return `https://wa.me/?text=${encodedMessage}`;
+export function generatePaymentReminderLink(
+phone: string, 
+clientName: string, 
+amount: number, 
+daysOverdue: number
+): string {
+const message = `Hola *${clientName}*,\n\nLe recordamos que tiene un pendiente de *₡${amount.toFixed(2)}* con ${daysOverdue} días de vencido.\n\nPor favor, acérquese a cancelar o realice un SINPE al número del negocio.\n\n¡Gracias!`;
+
+const encodedMessage = encodeURIComponent(message);
+return `https://wa.me/${phone}?text=${encodedMessage}`;
 }
 
-/**
- * Verifica si un número de teléfono es válido para WhatsApp
- * Soporta formatos de Costa Rica (+506) y internacionales
- */
-export function isValidWhatsAppPhone(phone: string): boolean {
-  // Limpiar formato
-  const clean = phone.replace(/[^0-9+]/g, '');
-  
-  // Patrón básico: debe tener al menos 8 dígitos
-  const digits = clean.replace(/\D/g, '');
-  if (digits.length < 8) return false;
-  
-  // Si comienza con +, validar formato internacional
-  if (clean.startsWith('+')) {
-    return /^\+\d{8,15}$/.test(clean);
-  }
-  
-  // Número local (asumir Costa Rica si tiene 8 dígitos)
-  if (digits.length === 8) {
-    return /^[2-8]\d{7}$/.test(digits); // Números válidos de CR
-  }
-  
-  return true; // Aceptar otros formatos internacionales
+export function validatePhoneCR(phone: string): boolean {
+// Validar formato Costa Rica: 506 + 8 dígitos (móvil) o 506 + 8 dígitos (fijo)
+const regex = /^506[2-8]\d{7}$/;
+return regex.test(phone.replace(/\D/g, ''));
 }
 
-/**
- * Formatea número de teléfono para mostrar en UI
- */
-export function formatPhoneForDisplay(phone: string): string {
-  const clean = phone.replace(/\D/g, '');
-  
-  // Formato Costa Rica: 8888-8888
-  if (clean.length === 8) {
-    return `${clean.slice(0, 4)}-${clean.slice(4)}`;
-  }
-  
-  // Formato internacional con código de país
-  if (clean.length > 8) {
-    return `+${clean.slice(0, 3)} ${clean.slice(3)}`;
-  }
-  
-  return phone;
+export function formatPhoneCR(phone: string): string {
+// Limpiar y formatear: 50688888888
+const cleaned = phone.replace(/\D/g, '');
+
+if (cleaned.length === 8) {
+return '506' + cleaned;
+}
+if (cleaned.length === 11 && cleaned.startsWith('506')) {
+return cleaned;
+}
+
+return cleaned; // Retornar como está si no coincide
 }
