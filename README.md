@@ -1,97 +1,171 @@
-# Contabilidad App - Documentación Técnica
+# 🏪 POS Moderno para Pulperías y Sodas
 
-> Documentación completa para replicar la aplicación de contabilidad usando el stack Kairux.
+Sistema de Punto de Venta (POS) moderno, rápido y offline-first construido con el stack más actualizado para 2026.
 
-## 📋 Descripción
+## 🚀 Stack Tecnológico
 
-Este repositorio contiene la documentación técnica completa para construir una aplicación de gestión contable y financiera diseñada para PYMEs y profesionales independientes en Costa Rica.
+- **Frontend**: SvelteKit 2 + Svelte 5 (Runes)
+- **Estilos**: Tailwind CSS v4 con diseño Liquid Glass
+- **Backend**: Cloudflare Workers
+- **Base de Datos**: Cloudflare D1 (SQLite)
+- **Cache/Sesiones**: Cloudflare KV
+- **Archivos**: Cloudflare R2 (imágenes de productos)
+- **Auth**: Lucia Auth
+- **Validación**: Zod
+- **ORM**: Drizzle ORM
 
-### Características principales:
-- **Libro Diario Digital** - Registro de transacciones (ingresos/gastos)
-- **Catálogo de Productos/Servicios** con códigos CABYS
-- **Gestión de Contactos** (clientes/proveedores)
-- **Seguimiento de Facturas** y plazos de pago
-- **Reportes financieros** (Balance, CxC, CxP)
-- **Soporte para Facturación Electrónica** de Costa Rica
+## ✨ Características Principales
 
----
+### 🛒 Punto de Venta (POS)
+- Interfaz rápida y responsiva (mobile-first)
+- Soporte para lectores de código de barras USB/Bluetooth
+- Múltiples métodos de pago: efectivo, tarjeta, transferencia, fiado
+- Carrito de compras en tiempo real
+- Funcionamiento offline con sincronización automática
 
-## 📁 Estructura del Repositorio
+### 📦 Inventario
+- Gestión de productos con categorías
+- Control de stock con alertas de mínimo
+- Soporte para códigos de barra
+- Alertas de stock bajo en tiempo real
+- Valorización del inventario
+
+### 👥 CRM - Clientes
+- Base de datos de clientes
+- Sistema de fiado con límites de crédito
+- Historial de compras
+- Gestión de saldos pendientes
+- Registro de pagos
+
+### 📊 Reportes
+- Ventas del día en tiempo real
+- Métricas clave: total, transacciones, ticket promedio
+- Desglose por método de pago
+- Últimas transacciones
+- Cierre de caja
+
+### ⚙️ Configuración
+- Datos del negocio personalizables
+- Configuración fiscal (impuestos, moneda)
+- Gestión de usuarios
+- Exportación/importación de datos
+- Respaldo completo de la base de datos
+
+## 🎨 Diseño Liquid Glass
+
+Interfaz moderna con efecto glassmorphism:
+- Fondos translúcidos con blur
+- Bordes sutiles brillantes
+- Sombras suaves
+- Gradientes modernos
+- Totalmente responsive (mobile-first)
+- Modo oscuro por defecto
+
+## 📱 Multi-Plataforma
+
+- **Móvil**: App nativa PWA para teléfonos
+- **Tablet**: Optimizado para iPad/Android tablets
+- **Escritorio**: Web app para computadoras
+- **Offline**: Funciona sin conexión a internet
+
+## 🛠️ Instalación y Desarrollo
+
+### Requisitos Previos
+- Node.js 20+
+- npm o pnpm
+- Wrangler CLI (para Cloudflare)
+
+### Pasos de Instalación
+
+```bash
+# Instalar dependencias
+npm install
+
+# Configurar Cloudflare (crear recursos)
+wrangler login
+
+# Crear base de datos D1
+wrangler d1 create pos-database
+
+# Actualizar wrangler.toml con el database_id
+
+# Crear KV namespace
+wrangler kv:namespace create SESSION_KV
+
+# Crear bucket R2
+wrangler r2 bucket create product-images
+
+# Ejecutar en desarrollo
+npm run dev
+
+# Build para producción
+npm run build
+
+# Preview local con emulación de Cloudflare
+wrangler pages dev
+```
+
+## 📁 Estructura del Proyecto
 
 ```
-.
-├── README.md                          # Este archivo
-├── docs/                              # Documentación general
-│   ├── resumen.md                     # Modelo de negocio y arquitectura
-│   └── SKELETON.md                    # Stack tecnológico Kairux
-│
-├── source/                            # Fuente original
-│   └── contabilidad_Application Documentation.pdf
-│
-├── extracted/                         # Datos extraídos del PDF
-│   ├── tablas.md                      # Definición de tablas
-│   ├── columnas.md                    # Definición de 87 columnas
-│   ├── vistas.md                      # Configuración de 29 vistas
-│   ├── reglas.md                      # 14 reglas de formato
-│   └── acciones.md                    # 23 acciones
-│
-└── specs/                             # Especificaciones Kairux (para implementación)
-    ├── 01_SCHEMA_SPECIFICATION.md      # Drizzle ORM schemas
-    ├── 02_COMMAND_REGISTRY_SPEC.md     # Comandos HF/HO
-    ├── 03_BUSINESS_MODULES_SPEC.md     # Estructura de módulos
-    ├── 04_FORMULAS_CALCULATIONS_SPEC.md # Fórmulas y cálculos
-    ├── 05_UI_COMPONENTS_SPEC.md        # Componentes Svelte
-    └── SPEC_KAIRUX_MAPPING.md          # Documento maestro de mapeo
+pos-app/
+├── src/
+│   ├── lib/
+│   │   ├── components/     # Componentes reutilizables
+│   │   └── server/
+│   │       └── database.ts # Esquema D1 y funciones DB
+│   ├── routes/
+│   │   ├── +page.svelte    # Dashboard principal
+│   │   ├── pos/            # Módulo de ventas
+│   │   ├── inventory/      # Módulo de inventario
+│   │   ├── crm/            # Módulo de clientes
+│   │   ├── reports/        # Módulo de reportes
+│   │   └── settings/       # Módulo de configuración
+│   ├── app.css             # Estilos globales + Tailwind
+│   └── app.html            # HTML base
+├── static/
+│   └── manifest.json       # PWA manifest
+├── wrangler.toml           # Configuración Cloudflare
+├── svelte.config.js        # Configuración SvelteKit
+├── vite.config.ts          # Configuración Vite + Tailwind v4
+└── package.json
 ```
 
----
+## 🔐 Seguridad
 
-## 🚀 Stack Tecnológico (Kairux)
+- Autenticación con sesiones seguras en KV
+- Protección CSRF
+- Validación de datos con Zod
+- Roles de usuario (admin, vendedor)
+- Encriptación de datos sensibles
 
-| Capa | Tecnología |
-|------|-----------|
-| **Backend** | Cloudflare Workers + D1 (SQLite) + Drizzle ORM |
-| **Storage** | Cloudflare R2 (documentos) + KV (configuración) |
-| **Frontend** | Svelte 5 (Runes) + Tailwind CSS v4 |
-| **Routing** | SvelteKit |
-| **Comandos** | Polygraph (HF/HO) |
+## 🌐 Despliegue en Cloudflare
 
----
+```bash
+# Deploy a Cloudflare Pages
+npm run build
+wrangler pages deploy .svelte-kit/cloudflare
 
-## 📊 Entidades Principales
+# O usar CI/CD automático conectando GitHub a Cloudflare Pages
+```
 
-1. **Contactos** - Directorio CRM (Clientes, Proveedores, Ambos)
-2. **Catálogo** - Productos, servicios y gastos fijos
-3. **Transacciones** - Registro financiero maestro (facturas, gastos)
-4. **Abonos** - Pagos parciales sobre transacciones a crédito
+## 📈 Próximas Mejoras
 
----
+- [ ] Escaneo de código de barras con cámara del móvil
+- [ ] Impresión de tickets térmicos (Bluetooth/USB)
+- [ ] Notificaciones push de stock bajo
+- [ ] Integración con WhatsApp para enviar recibos
+- [ ] Modo multi-sucursal
+- [ ] Dashboard analítico avanzado
+- [ ] Importación masiva desde Excel/CSV
+- [ ] API REST para integraciones externas
 
-## 🛠️ Cómo usar esta documentación
+## 📄 Licencia
 
-### Para entender el negocio:
-1. Lee `docs/resumen.md`
-
-### Para implementar el backend:
-1. Revisa `specs/01_SCHEMA_SPECIFICATION.md` - Crea las tablas en D1
-2. Implementa `specs/02_COMMAND_REGISTRY_SPEC.md` - Crea los comandos HF
-
-### Para implementar el frontend:
-1. Usa `specs/03_BUSINESS_MODULES_SPEC.md` - Estructura las rutas
-2. Implementa `specs/04_FORMULAS_CALCULATIONS_SPEC.md` - Lógica de cálculos
-3. Usa `specs/05_UI_COMPONENTS_SPEC.md` - Crea los componentes visuales
+MIT License - Libre uso comercial
 
 ---
 
-## 📝 Notas
+**Construido con ❤️ usando Svelte 5 + Cloudflare**
 
-- **87 columnas** documentadas en `extracted/columnas.md`
-- **29 vistas** configuradas en `extracted/vistas.md`
-- **14 reglas de formato** en `extracted/reglas.md`
-- **23 acciones** definidas en `extracted/acciones.md`
-
----
-
-**Versión:** 1.0  
-**Última actualización:** Abril 2026  
-**Autor:** denagui
+*Perfecto para pulperías, sodas, tiendas de barrio y pequeños comercios.*

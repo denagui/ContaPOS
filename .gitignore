@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+.svelte-kit/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Wrangler
+.wrangler/
+
+# Test coverage
+coverage/

@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/* Liquid Glass Design System - Modern POS Theme */
+@theme {
+  --color-glass-bg: rgba(255, 255, 255, 0.1);
+  --color-glass-border: rgba(255, 255, 255, 0.2);
+  --color-glass-shadow: rgba(0, 0, 0, 0.1);
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --font-family-sans: 'Inter', system-ui, sans-serif;
+}
+
+/* Glass morphism base styles */
+.glass {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: 0 8px 32px var(--color-glass-shadow);
+}
+
+.glass-card {
+  @apply glass rounded-2xl p-4 transition-all duration-300 hover:shadow-lg;
+}
+
+.glass-button {
+  @apply glass px-6 py-3 rounded-xl font-semibold transition-all duration-300 
+         hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Mobile-first responsive utilities */
+@media (max-width: 640px) {
+  .pos-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .pos-grid {
+    @apply grid grid-cols-3 gap-3;
+  }
+}
+
+@media (min-width: 1025px) {
+  .pos-grid {
+    @apply grid grid-cols-4 gap-4;
+  }
+}
+
+/* PWA offline styles */
+.offline-indicator {
+  @apply fixed top-4 right-4 bg-warning text-white px-4 py-2 rounded-lg 
+         glass z-50 animate-pulse;
+}
+
+/* Custom scrollbar for product lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-glass-border);
+  border-radius: 3px;
+}

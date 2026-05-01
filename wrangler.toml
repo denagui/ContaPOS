@@ -1,0 +1,19 @@
+[build]
+command = "npm run build"
+publish = ".svelte-kit/cloudflare"
+
+[dev]
+command = "npm run dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pos-database"
+database_id = ""
+
+[[kv_namespaces]]
+binding = "SESSION_KV"
+id = ""
+
+[[r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "product-images"
