@@ -13,6 +13,7 @@ import { sqliteTable, text, real, integer, index } from 'drizzle-orm/sqlite-core
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   username: text('username').unique().notNull(),
   email: text('email').unique().notNull(),
   passwordHash: text('password_hash').notNull(),
@@ -22,12 +23,14 @@ export const users = sqliteTable('users', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
+  index('idx_users_company').on(table.companyId),
   index('idx_users_username').on(table.username),
   index('idx_users_email').on(table.email),
 ]);
 
 export const branches = sqliteTable('branches', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   name: text('name').notNull(),
   address: text('address'),
   phone: text('phone'),
@@ -36,20 +39,26 @@ export const branches = sqliteTable('branches', {
   active: integer('active').default(1),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-});
+}, (table) => [
+  index('idx_branches_company').on(table.companyId),
+]);
 
 export const categories = sqliteTable('categories', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   name: text('name').notNull(),
   description: text('description'),
   parentId: text('parent_id').references(() => categories.id),
   active: integer('active').default(1),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-});
+}, (table) => [
+  index('idx_categories_company').on(table.companyId),
+]);
 
 export const products = sqliteTable('products', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   sku: text('sku').unique().notNull(),
   barcode: text('barcode').unique(),
   name: text('name').notNull(),
@@ -74,6 +83,7 @@ export const products = sqliteTable('products', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
+  index('idx_products_company').on(table.companyId),
   index('idx_products_barcode').on(table.barcode),
   index('idx_products_sku').on(table.sku),
   index('idx_products_category').on(table.categoryId),
@@ -90,7 +100,7 @@ export const products = sqliteTable('products', {
 
 export const sales = sqliteTable('sales', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id), // SCOPED DB
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   saleNumber: text('sale_number').unique().notNull(),
   branchId: text('branch_id').references(() => branches.id),
   contactId: text('contact_id').references(() => contacts.id),
@@ -118,7 +128,7 @@ export const sales = sqliteTable('sales', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_sales_org').on(table.organizationId), // SCOPED DB
+  index('idx_sales_company').on(table.companyId), // SCOPED DB
   index('idx_sales_contact').on(table.contactId),
   index('idx_sales_user').on(table.userId),
   index('idx_sales_branch').on(table.branchId),
@@ -146,6 +156,7 @@ export const saleItems = sqliteTable('sale_items', {
 
 export const inventoryMovements = sqliteTable('inventory_movements', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   productId: text('product_id').references(() => products.id),
   movementType: text('movement_type', { enum: ['entry', 'exit', 'adjustment', 'return', 'transfer'] }),
   quantity: real('quantity').notNull(),
@@ -158,37 +169,43 @@ export const inventoryMovements = sqliteTable('inventory_movements', {
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
+  index('idx_inventory_company').on(table.companyId),
   index('idx_inventory_product').on(table.productId),
   index('idx_inventory_created').on(table.createdAt),
 ]);
 
 export const purchases = sqliteTable('purchases', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id), // SCOPED DB
   purchaseNumber: text('purchase_number').unique().notNull(),
   contactId: text('contact_id').references(() => contacts.id),
   branchId: text('branch_id').references(() => branches.id),
-  subtotal: real('subtotal').notNull(),
-  discount: real('discount').default(0),
-  taxAmount: real('tax_amount').notNull(),
-  totalAmount: real('total_amount').notNull(),
+  subtotalCents: integer('subtotal_cents').notNull(),
+  discountCents: integer('discount_cents').default(0),
+  taxAmountCents: integer('tax_amount_cents').notNull(),
+  totalAmountCents: integer('total_amount_cents').notNull(),
   paymentStatus: text('payment_status', { enum: ['paid', 'pending', 'partial'] }).default('pending'),
   received: integer('received').default(0),
   notes: text('notes'),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-});
+}, (table) => [
+  index('idx_purchases_company').on(table.companyId),
+]);
 
 export const purchaseItems = sqliteTable('purchase_items', {
   id: text('id').primaryKey(),
   purchaseId: text('purchase_id').notNull().references(() => purchases.id, { onDelete: 'cascade' }),
   productId: text('product_id').references(() => products.id),
   quantity: real('quantity').notNull(),
-  unitCost: real('unit_cost').notNull(),
-  totalAmount: real('total_amount').notNull(),
+  unitCostCents: integer('unit_cost_cents').notNull(),
+  totalAmountCents: integer('total_amount_cents').notNull(),
   // Epoch 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
-});
+}, (table) => [
+  index('idx_purchase_items_purchase').on(table.purchaseId),
+]);
 
 // ============================================
 // TABLAS DE CRM Y FIDELIZACIÓN
@@ -292,7 +309,7 @@ export const auditLogs = sqliteTable('audit_logs', {
 // TABLAS DE CONTABILIDAD Y ORGANIZACIÓN
 // ============================================
 
-export const organizations = sqliteTable('organizations', {
+export const companies = sqliteTable('companies', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   taxId: text('tax_id'), // Cedula Juridica o Fisica
@@ -313,7 +330,7 @@ export const organizations = sqliteTable('organizations', {
 
 export const expenses = sqliteTable('expenses', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   expenseNumber: text('expense_number').unique(),
   // PRECISIÓN MONETARIA: Céntimos enteros
   amountCents: integer('amount_cents').notNull(),
@@ -347,7 +364,7 @@ export const expenses = sqliteTable('expenses', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_expenses_org').on(table.organizationId),
+  index('idx_expenses_company').on(table.companyId),
   index('idx_expenses_date').on(table.date),
   index('idx_expenses_category').on(table.category),
   index('idx_expenses_niif').on(table.niifCategory),
@@ -359,7 +376,7 @@ export const expenses = sqliteTable('expenses', {
 
 export const revenues = sqliteTable('revenues', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   revenueNumber: text('revenue_number').unique(),
   saleId: text('sale_id').references(() => sales.id),
   contactId: text('contact_id').references(() => contacts.id),
@@ -392,7 +409,7 @@ export const revenues = sqliteTable('revenues', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_revenues_org').on(table.organizationId),
+  index('idx_revenues_company').on(table.companyId),
   index('idx_revenues_date').on(table.date),
   index('idx_revenues_category').on(table.category),
   index('idx_revenues_niif').on(table.niifCategory),
@@ -442,7 +459,7 @@ export const paymentInstallments = sqliteTable('payment_installments', {
 
 export const contacts = sqliteTable('contacts', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   // TIPO DE CONTACTO: customer, supplier, both
   contactType: text('contact_type', { enum: ['customer', 'supplier', 'both'] }).notNull(),
   // INFORMACIÓN BÁSICA
@@ -475,7 +492,7 @@ export const contacts = sqliteTable('contacts', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_contacts_org').on(table.organizationId),
+  index('idx_contacts_company').on(table.companyId),
   index('idx_contacts_type').on(table.contactType),
   index('idx_contacts_document').on(table.documentNumber),
   index('idx_contacts_active').on(table.active),
@@ -485,9 +502,9 @@ export const contacts = sqliteTable('contacts', {
 // CONFIGURACIÓN DE ORGANIZACIÓN
 // ============================================
 
-export const organizationSettings = sqliteTable('organization_settings', {
+export const companySettings = sqliteTable('company_settings', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   settingKey: text('setting_key').notNull(),
   settingValue: text('setting_value').notNull(), // JSON string para valores complejos
   type: text('type', { enum: ['string', 'number', 'boolean', 'json'] }).default('string'),
@@ -495,7 +512,7 @@ export const organizationSettings = sqliteTable('organization_settings', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_org_settings_org').on(table.organizationId),
+  index('idx_settings_company').on(table.companyId),
   index('idx_org_settings_key').on(table.settingKey),
 ]);
 
@@ -507,7 +524,7 @@ export const organizationSettings = sqliteTable('organization_settings', {
 
 export const chartOfAccounts = sqliteTable('chart_of_accounts', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   accountCode: text('account_code').notNull(), // Ej: 1-01-001
   accountName: text('account_name').notNull(),
   accountType: text('account_type', { 
@@ -519,7 +536,7 @@ export const chartOfAccounts = sqliteTable('chart_of_accounts', {
   niifCode: text('niif_code'), // Código NIIF (ej: 1105, 4135)
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_chart_org').on(table.organizationId),
+  index('idx_chart_company').on(table.companyId),
   index('idx_chart_code').on(table.accountCode),
   index('idx_chart_type').on(table.accountType),
 ]);
@@ -527,7 +544,7 @@ export const chartOfAccounts = sqliteTable('chart_of_accounts', {
 export const journalEntries = sqliteTable('journal_entries', {
   id: text('id').primaryKey(),
   entryNumber: text('entry_number').unique().notNull(), // Ej: ASIENTO-2024-00001
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   branchId: text('branch_id').references(() => branches.id),
   transactionDate: integer('transaction_date', { mode: 'number' }).notNull(), // Epoch 13
   postingDate: integer('posting_date', { mode: 'number' }).notNull(), // Epoch 13
@@ -549,7 +566,7 @@ export const journalEntries = sqliteTable('journal_entries', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_journal_org').on(table.organizationId),
+  index('idx_journal_company').on(table.companyId),
   index('idx_journal_date').on(table.transactionDate),
   index('idx_journal_document').on(table.documentId),
   index('idx_journal_posted').on(table.isPosted),
@@ -585,7 +602,7 @@ export const journalLines = sqliteTable('journal_lines', {
 
 export const aiSuggestions = sqliteTable('ai_suggestions', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   suggestionType: text('suggestion_type', {
     enum: [
       'promotion',          // Sugerir promoción
@@ -621,7 +638,7 @@ export const aiSuggestions = sqliteTable('ai_suggestions', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_ai_org').on(table.organizationId),
+  index('idx_ai_company').on(table.companyId),
   index('idx_ai_type').on(table.suggestionType),
   index('idx_ai_status').on(table.status),
   index('idx_ai_product').on(table.relatedProductId),
@@ -636,7 +653,7 @@ export const aiSuggestions = sqliteTable('ai_suggestions', {
 
 export const auditLogsEnhanced = sqliteTable('audit_logs_enhanced', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   userId: text('user_id').references(() => users.id),
   action: text('action').notNull(), // CREATE, UPDATE, DELETE, LOGIN, EXPORT, etc.
   resourceType: text('resource_type').notNull(), // 'sale', 'product', 'contact', etc.
@@ -658,7 +675,7 @@ export const auditLogsEnhanced = sqliteTable('audit_logs_enhanced', {
   previousHash: text('previous_hash'), // Encadenamiento tipo blockchain
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_audit_org').on(table.organizationId),
+  index('idx_audit_company').on(table.companyId),
   index('idx_audit_user').on(table.userId),
   index('idx_audit_action').on(table.action),
   index('idx_audit_resource').on(table.resourceType),
@@ -674,7 +691,7 @@ export const auditLogsEnhanced = sqliteTable('audit_logs_enhanced', {
 
 export const aiDecisionsLog = sqliteTable('ai_decisions_log', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => companies.id),
   decisionType: text('decision_type', {
     enum: [
       'pricing',           // Ajuste de precios
@@ -706,7 +723,7 @@ export const aiDecisionsLog = sqliteTable('ai_decisions_log', {
   // AUDITORÍA
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_ai_decisions_org').on(table.organizationId),
+  index('idx_ai_decisions_company').on(table.companyId),
   index('idx_ai_decisions_type').on(table.decisionType),
   index('idx_ai_decisions_risk').on(table.riskLevel),
   index('idx_ai_decisions_review').on(table.requiresReview),
@@ -722,7 +739,7 @@ export const aiDecisionsLog = sqliteTable('ai_decisions_log', {
 
 export const accountingPeriods = sqliteTable('accounting_periods', {
   id: text('id').primaryKey(),
-  organizationId: text('organization_id').references(() => organizations.id).notNull(),
+  companyId: text('company_id').references(() => companies.id).notNull(),
   periodName: text('period_name').notNull(), // Ej: "Enero 2024", "Q1 2024"
   startDate: integer('start_date', { mode: 'number' }).notNull(), // Epoch 13
   endDate: integer('end_date', { mode: 'number' }).notNull(), // Epoch 13
@@ -758,7 +775,7 @@ export const accountingPeriods = sqliteTable('accounting_periods', {
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
-  index('idx_period_org').on(table.organizationId),
+  index('idx_period_company').on(table.companyId),
   index('idx_period_dates').on(table.startDate, table.endDate),
   index('idx_period_status').on(table.status),
   index('idx_period_closed').on(table.closedAt),
