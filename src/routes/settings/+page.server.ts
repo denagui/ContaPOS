@@ -1,53 +1,67 @@
-import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
-import { organizationService } from '$lib/server/services/organization.service';
-import { getScope } from '$lib/server/db';
+import type { Actions, PageServerLoad } from './$types';
+import { db } from '$lib/server/db';
+import { organizationSettings, organizations } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user) {
-    throw redirect(303, '/login');
-  }
+if (!locals.user) throw redirect(302, '/login');
 
-  const scope = getScope(locals.user);
-  
-  // Cargar configuración actual de la organización
-  const settings = await organizationService.getSettings(scope.organizationId);
+const orgId = locals.organizationId;
+if (!orgId) throw redirect(302, '/onboarding');
 
-  return {
-    settings,
-    user: locals.user
-  };
+const settings = await db.query.organizationSettings.findFirst({
+where: eq(organizationSettings.organizationId, orgId)
+});
+
+return { 
+settings: settings || null,
+industries: [
+{ value: 'retail', label: 'Pulpería / Tienda' },
+{ value: 'restaurant', label: 'Restaurante / Bar / Soda' },
+{ value: 'services', label: 'Servicios Profesionales' },
+{ value: 'utility', label: 'ASADA / Servicios Públicos' }
+]
+};
 };
 
 export const actions: Actions = {
-  updateSettings: async ({ request, locals }) => {
-    const scope = getScope(locals.user);
-    const data = await request.formData();
+update: async ({ request, locals }) => {
+if (!locals.user || !locals.organizationId) return fail(401, { error: 'No autorizado' });
 
-    try {
-      const settingsData = {
-        industryType: data.get('industryType') as string,
-        currency: data.get('currency') as string,
-        taxId: data.get('taxId') as string | null,
-        businessName: data.get('businessName') as string | null,
-        address: data.get('address') as string | null,
-        phone: data.get('phone') as string | null,
-        email: data.get('email') as string | null,
-        logoUrl: data.get('logoUrl') as string | null,
-        // Feature Flags según industria
-        enableTables: data.get('enableTables') === 'on',
-        enableRecipes: data.get('enableRecipes') === 'on',
-        enableMeters: data.get('enableMeters') === 'on',
-        enableCredit: data.get('enableCredit') === 'on',
-        enableInvoicing: data.get('enableInvoicing') === 'on'
-      };
+const data = await request.formData();
+const industry = data.get('industry') as string;
+const currency = data.get('currency') as string;
+const taxId = data.get('taxId') as string;
 
-      await organizationService.updateSettings(scope.organizationId, settingsData);
+// Feature Flags dinámicos según industria
+const flags: any = {
+hasTables: industry === 'restaurant',
+hasRecipes: industry === 'restaurant',
+hasMeters: industry === 'utility',
+hasProjects: industry === 'services',
+hasLoyalty: industry === 'retail' || industry === 'restaurant',
+hasExpenses: true // Todos lo necesitan
+};
 
-      return { success: true };
-    } catch (error) {
-      console.error('Error updating settings:', error);
-      return fail(400, { error: 'Failed to update settings', message: error instanceof Error ? error.message : 'Unknown error' });
-    }
-  }
+try {
+await db.insert(organizationSettings)
+.values({
+organizationId: locals.organizationId,
+industry,
+currency,
+taxId,
+...flags
+})
+.onConflictDoUpdate({
+target: organizationSettings.organizationId,
+set: { industry, currency, taxId, ...flags }
+});
+
+return { success: true };
+} catch (e) {
+console.error('Error guardando configuración:', e);
+return fail(500, { error: 'Error al guardar configuración' });
+}
+}
 };
