@@ -311,6 +311,18 @@ export const expenses = sqliteTable('expenses', {
   subtotal: real('subtotal').notNull(),
   taxAmount: real('tax_amount').default(0),
   taxRate: real('tax_rate').default(0.13),
+  // CATEGORÍA NIIF: Clasificación según NIIF para PYMES
+  niifCategory: text('niif_category', { 
+    enum: [
+      'cost_of_sales',           // Costo de ventas (61)
+      'operating_expense',       // Gastos operativos (62)
+      'employee_benefit',        // Beneficios a empleados (63)
+      'depreciation',            // Depreciación y amortización (64)
+      'financial_expense',       // Gastos financieros (65)
+      'other_expense',           // Otros gastos (66)
+      'non_operating_expense'    // Gastos no operativos (67)
+    ]
+  }).default('operating_expense'),
   category: text('category').notNull(),
   description: text('description').notNull(),
   date: integer('date', { mode: 'number' }).notNull().$defaultFn(() => Date.now()),
@@ -327,6 +339,50 @@ export const expenses = sqliteTable('expenses', {
   index('idx_expenses_org').on(table.organizationId),
   index('idx_expenses_date').on(table.date),
   index('idx_expenses_category').on(table.category),
+  index('idx_expenses_niif').on(table.niifCategory),
+]);
+
+// ============================================
+// INGRESOS OPERATIVOS Y NO OPERATIVOS
+// ============================================
+
+export const revenues = sqliteTable('revenues', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  revenueNumber: text('revenue_number').unique(),
+  saleId: text('sale_id').references(() => sales.id),
+  contactId: text('contact_id').references(() => contacts.id),
+  amount: real('amount').notNull(),
+  subtotal: real('subtotal').notNull(),
+  taxAmount: real('tax_amount').default(0),
+  taxRate: real('tax_rate').default(0.13),
+  // CATEGORÍA NIIF: Clasificación según NIIF para PYMES
+  niifCategory: text('niif_category', {
+    enum: [
+      'operating_revenue',       // Ingresos operativos (41)
+      'non_operating_revenue',   // Ingresos no operativos (42)
+      'financial_income',        // Ingresos financieros (43)
+      'other_income'             // Otros ingresos (44)
+    ]
+  }).default('operating_revenue'),
+  category: text('category').notNull(),
+  description: text('description').notNull(),
+  date: integer('date', { mode: 'number' }).notNull().$defaultFn(() => Date.now()),
+  paymentMethod: text('payment_method', {
+    enum: ['cash', 'card', 'transfer', 'sinpe', 'credit']
+  }).notNull(),
+  receiptNumber: text('receipt_number'),
+  haciendaKey: text('hacienda_key'),
+  status: text('status', { enum: ['pending', 'completed', 'cancelled'] }).default('completed'),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_revenues_org').on(table.organizationId),
+  index('idx_revenues_date').on(table.date),
+  index('idx_revenues_category').on(table.category),
+  index('idx_revenues_niif').on(table.niifCategory),
+  index('idx_revenues_sale').on(table.saleId),
 ]);
 
 // ============================================
