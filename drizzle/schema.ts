@@ -280,3 +280,52 @@ export const auditLogs = sqliteTable('audit_logs', {
   index('idx_audit_user').on(table.userId),
   index('idx_audit_created').on(table.createdAt),
 ]);
+
+// ============================================
+// TABLAS DE CONTABILIDAD Y ORGANIZACIÓN
+// ============================================
+
+export const organizations = sqliteTable('organizations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  taxId: text('tax_id'), // Cedula Juridica o Fisica
+  legalName: text('legal_name'),
+  address: text('address'),
+  phone: text('phone'),
+  email: text('email'),
+  industryType: text('industry_type', { 
+    enum: ['retail', 'restaurant', 'services', 'utilities', 'accounting'] 
+  }).default('retail'),
+  currency: text('currency').default('CRC'),
+  taxRate: real('tax_rate').default(0.13),
+  logoUrl: text('logo_url'),
+  isActive: integer('is_active').default(1),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+});
+
+export const expenses = sqliteTable('expenses', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  expenseNumber: text('expense_number').unique(),
+  amount: real('amount').notNull(),
+  subtotal: real('subtotal').notNull(),
+  taxAmount: real('tax_amount').default(0),
+  taxRate: real('tax_rate').default(0.13),
+  category: text('category').notNull(),
+  description: text('description').notNull(),
+  date: text('date').notNull(),
+  paymentMethod: text('payment_method', {
+    enum: ['cash', 'card', 'transfer', 'sinpe', 'credit']
+  }).notNull(),
+  receiptNumber: text('receipt_number'),
+  haciendaKey: text('hacienda_key'),
+  status: text('status', { enum: ['pending', 'completed', 'cancelled'] }).default('completed'),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_expenses_org').on(table.organizationId),
+  index('idx_expenses_date').on(table.date),
+  index('idx_expenses_category').on(table.category),
+]);

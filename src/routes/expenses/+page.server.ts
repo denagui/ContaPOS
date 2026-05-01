@@ -53,9 +53,24 @@ export const actions: Actions = {
 		const subtotal = amount - taxAmount;
 
 		// Generar Clave de Hacienda (si hay número de comprobante)
-		const haciendaKey = receiptNumber 
-			? generateHaciendaKey(orgId, new Date(date), amount, 'expense') 
-			: null;
+		let haciendaKey = null;
+		if (receiptNumber) {
+			// Obtener info de la organización para la cédula emisor
+			const org = await db.query.organizations.findFirst({
+				where: eq(organizations.id, orgId)
+			});
+			
+			if (org && org.taxId) {
+				haciendaKey = generateHaciendaKey({
+					timestamp: new Date(date),
+					sucursal: '001',
+					terminal: '00001',
+					tipoComprobante: '02', // 02 = Nota de Débito para gastos
+					consecutivo: Math.floor(Math.random() * 99999999),
+					cedulaEmisor: org.taxId
+				});
+			}
+		}
 
 		try {
 			await db.insert(expenses).values({
