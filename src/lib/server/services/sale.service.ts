@@ -3,17 +3,22 @@ import type { Database } from '$lib/server/db';
 import { sales, saleItems, products, contacts, organizations, inventoryMovements } from '$lib/server/db';
 import { generateId } from 'oslo';
 import { generateHaciendaKey } from '$lib/server/utils/hacienda-key';
+import { MoneyUtils } from '$lib/server/utils/money-utils';
+import { getScopedDB } from '$lib/server/db/scoped-db';
 import {
   createBillingOrchestrator,
   type ElectronicInvoice,
   type InvoiceItem,
 } from './billing';
+import { AutoAccountingEngine } from './accounting/auto-accounting-engine';
+import { ClosingValidator } from './accounting/closing-engine';
+import { createAuditLog } from './audit/blockchain-audit';
 
 export interface SaleItemDTO {
   productId: string;
   quantity: number;
-  unitPrice: number;
-  discount?: number;
+  unitPriceCents: number; // PRECISIÓN: Céntimos enteros
+  discountCents?: number;
 }
 
 export interface CreateSaleDTO {
@@ -21,22 +26,31 @@ export interface CreateSaleDTO {
   customerId?: string;
   items: SaleItemDTO[];
   paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'credit';
-  amountPaid?: number;
+  amountPaidCents?: number;
   notes?: string;
 }
 
 export class SaleService {
   constructor(private db: Database) {}
 
-  async create(data: CreateSaleDTO, userId: string, organizationId: string) {
+  async create(data: CreateSaleDTO, userId: string, companyId: string) {
     const saleId = generateId(15);
     const saleNumber = await this.generateSaleNumber();
-    const now = new Date().toISOString();
+    const now = Date.now(); // Epoch 13
 
-    // Calcular totales con IVA flexible por producto
-    let subtotal = 0;
-    let totalDiscount = 0;
-    let totalTax = 0;
+    // Validar período contable antes de crear transacción
+    const periods = await this.getAccountingPeriods(companyId);
+    if (!ClosingValidator.canCreateTransaction(periods, now)) {
+      throw new Error(
+        'Transacción bloqueada: El período fiscal está cerrado. ' +
+        'Contacte al supervisor para reapertura.'
+      );
+    }
+
+    // Calcular totales con IVA flexible por producto (en céntimos)
+    let subtotalCents = 0;
+    let totalDiscountCents = 0;
+    let totalTaxCents = 0;
 
     const itemsWithTotals = await Promise.all(data.items.map(async (item) => {
       // Obtener el producto para saber su tipo de IVA
@@ -49,28 +63,29 @@ export class SaleService {
       const taxType = productData[0]?.taxType || '13';
       const taxRate = parseInt(taxType) / 100; // 0, 0.04, 0.08, 0.13
 
-      const itemSubtotal = item.quantity * item.unitPrice;
-      const itemDiscount = item.discount || 0;
-      const itemTaxableAmount = itemSubtotal - itemDiscount;
-      const itemTax = itemTaxableAmount * taxRate;
-      const itemTotal = itemTaxableAmount + itemTax;
+      // Cálculos en céntimos enteros para precisión
+      const itemSubtotalCents = Math.round(item.quantity * item.unitPriceCents);
+      const itemDiscountCents = item.discountCents || 0;
+      const itemTaxableCents = itemSubtotalCents - itemDiscountCents;
+      const itemTaxCents = Math.round(itemTaxableCents * taxRate);
+      const itemTotalCents = itemTaxableCents + itemTaxCents;
 
-      subtotal += itemSubtotal;
-      totalDiscount += itemDiscount;
-      totalTax += itemTax;
+      subtotalCents += itemSubtotalCents;
+      totalDiscountCents += itemDiscountCents;
+      totalTaxCents += itemTaxCents;
 
       return {
         ...item,
-        discount: itemDiscount,
-        taxAmount: itemTax,
-        totalAmount: itemTotal,
+        discountCents: itemDiscountCents,
+        taxAmountCents: itemTaxCents,
+        totalAmountCents: itemTotalCents,
         taxType,
       };
     }));
 
-    const totalAmount = subtotal - totalDiscount + totalTax;
-    const amountPaid = data.amountPaid || totalAmount;
-    const changeAmount = amountPaid - totalAmount;
+    const totalAmountCents = subtotalCents - totalDiscountCents + totalTaxCents;
+    const amountPaidCents = data.amountPaidCents || totalAmountCents;
+    const changeAmountCents = amountPaidCents - totalAmountCents;
 
     // Generar Clave Hacienda
     let haciendaKey: string | null = null;
