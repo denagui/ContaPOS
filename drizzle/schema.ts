@@ -1,4 +1,5 @@
 import { sqliteTable, text, real, integer, index } from 'drizzle-orm/sqlite-core';
+import { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 
 // ============================================
 // UTILIDADES PARA FECHAS EPOCH 13
@@ -834,3 +835,169 @@ export const accountingPeriods = sqliteTable('accounting_periods', {
   index('idx_period_status').on(table.status),
   index('idx_period_closed').on(table.closedAt),
 ]);
+
+// ============================================
+// CONCILIACIÓN BANCARIA (FASE 4)
+// ============================================
+// Importación de extractos bancarios (CSV/OFX)
+// Matching automático con journal_lines
+// ============================================
+
+export const bankAccounts = sqliteTable('bank_accounts', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id).notNull(), // SCOPED DB
+  branchId: text('branch_id').references(() => branches.id),
+  accountName: text('account_name').notNull(), // Nombre descriptivo (ej: "Banco Nacional - Corriente")
+  accountNumber: text('account_number').notNull(), // Número de cuenta enmascarado
+  bankName: text('bank_name').notNull(), // Nombre del banco (ej: "Banco Nacional", "BAC")
+  accountType: text('account_type', { 
+    enum: ['checking', 'savings', 'credit_card', 'loan'] 
+  }).default('checking'),
+  currency: text('currency').default('CRC'), // ISO 4217
+  currentBalanceCents: integer('current_balance_cents').default(0), // Saldo según libros
+  lastReconciledBalanceCents: integer('last_reconciled_balance_cents').default(0), // Último saldo conciliado
+  lastReconciledAt: integer('last_reconciled_at', { mode: 'number' }), // Fecha última conciliación
+  isActive: integer('is_active').default(1),
+  // Configuración de importación
+  importFormat: text('import_format', { enum: ['csv', 'ofx', 'qif', 'manual'] }).default('csv'),
+  csvMapping: text('csv_mapping'), // JSON string con mapeo de columnas
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_bank_company').on(table.companyId),
+  index('idx_bank_branch').on(table.branchId),
+  index('idx_bank_active').on(table.isActive),
+]);
+
+export const bankTransactions = sqliteTable('bank_transactions', {
+  id: text('id').primaryKey(),
+  bankAccountId: text('bank_account_id').notNull().references(() => bankAccounts.id, { onDelete: 'cascade' }),
+  companyId: text('company_id').references(() => companies.id).notNull(), // SCOPED DB
+  // DATOS DE LA TRANSACCIÓN BANCARIA
+  transactionDate: integer('transaction_date', { mode: 'number' }).notNull(), // Fecha de la transacción
+  postingDate: integer('posting_date', { mode: 'number' }), // Fecha de contabilización
+  description: text('description').notNull(), // Descripción del extracto bancario
+  reference: text('reference'), // Referencia bancaria (cheque, transferencia, etc.)
+  transactionType: text('transaction_type', { 
+    enum: ['debit', 'credit', 'fee', 'interest', 'transfer', 'other'] 
+  }).default('other'),
+  // MONTOS EN CÉNTIMOS
+  amountCents: integer('amount_cents').notNull(), // Monto positivo para créditos, negativo para débitos
+  balanceAfterCents: integer('balance_after_cents'), // Saldo después de la transacción
+  currency: text('currency').default('CRC'),
+  exchangeRate: real('exchange_rate').default(1), // Para transacciones en moneda extranjera
+  // MATCHING CON JOURNAL LINES
+  matchedJournalLineId: text('matched_journal_line_id').references(() => journalLines.id),
+  matchStatus: text('match_status', { 
+    enum: ['unmatched', 'matched', 'pending_review', 'ignored'] 
+  }).default('unmatched'),
+  matchConfidenceScore: real('match_confidence_score'), // 0.0 a 1.0 para matching automático
+  matchNotes: text('match_notes'), // Notas sobre el matching
+  // IMPORTACIÓN
+  importBatchId: text('import_batch_id'), // ID del lote de importación
+  importSource: text('import_source', { enum: ['csv', 'ofx', 'qif', 'api', 'manual'] }).default('manual'),
+  importedAt: integer('imported_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  importedBy: text('imported_by').references(() => users.id),
+  // RECONCILIACIÓN
+  isReconciled: integer('is_reconciled').default(0),
+  reconciledAt: integer('reconciled_at', { mode: 'number' }),
+  reconciledBy: text('reconciled_by').references(() => users.id),
+  // NOTAS Y AJUSTES
+  notes: text('notes'),
+  category: text('category'), // Categoría para transacciones no匹配adas
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_banktrans_account').on(table.bankAccountId),
+  index('idx_banktrans_company').on(table.companyId),
+  index('idx_banktrans_date').on(table.transactionDate),
+  index('idx_banktrans_match').on(table.matchStatus),
+  index('idx_banktrans_reconciled').on(table.isReconciled),
+  index('idx_banktrans_import').on(table.importBatchId),
+]);
+
+export const reconciliationBatches = sqliteTable('reconciliation_batches', {
+  id: text('id').primaryKey(),
+  bankAccountId: text('bank_account_id').notNull().references(() => bankAccounts.id),
+  companyId: text('company_id').references(() => companies.id).notNull(), // SCOPED DB
+  batchNumber: text('batch_number').unique().notNull(), // Ej: REC-2024-00001
+  startDate: integer('start_date', { mode: 'number' }).notNull(), // Inicio del período
+  endDate: integer('end_date', { mode: 'number' }).notNull(), // Fin del período
+  // SALDOS
+  openingBalanceCents: integer('opening_balance_cents').notNull(), // Saldo inicial según banco
+  closingBalanceCents: integer('closing_balance_cents').notNull(), // Saldo final según banco
+  totalDepositsCents: integer('total_deposits_cents').default(0), // Total depósitos/conciliados
+  totalWithdrawalsCents: integer('total_withdrawals_cents').default(0), // Total retiros/conciliados
+  // ESTADO
+  status: text('status', { 
+    enum: ['in_progress', 'completed', 'cancelled'] 
+  }).default('in_progress'),
+  // DIFERENCIAS
+  hasDiscrepancies: integer('has_discrepancies').default(0),
+  discrepancyAmountCents: integer('discrepancy_amount_cents').default(0),
+  discrepancyNotes: text('discrepancy_notes'),
+  // PARTIDAS PENDIENTES
+  outstandingDepositsCents: integer('outstanding_deposits_cents').default(0), // Depósitos en tránsito
+  outstandingWithdrawalsCents: integer('outstanding_withdrawals_cents').default(0), // Cheques pendientes
+  // APROBACIÓN
+  reviewedBy: text('reviewed_by').references(() => users.id),
+  approvedBy: text('approved_by').references(() => users.id),
+  approvedAt: integer('approved_at', { mode: 'number' }),
+  // METADATOS
+  importFileName: text('import_file_name'), // Nombre del archivo importado
+  importedTransactionCount: integer('imported_transaction_count').default(0),
+  matchedTransactionCount: integer('matched_transaction_count').default(0),
+  manualAdjustmentCount: integer('manual_adjustment_count').default(0),
+  notes: text('notes'),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  completedAt: integer('completed_at', { mode: 'number' }),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_recon_batch_company').on(table.companyId),
+  index('idx_recon_batch_account').on(table.bankAccountId),
+  index('idx_recon_batch_status').on(table.status),
+  index('idx_recon_batch_dates').on(table.startDate, table.endDate),
+]);
+
+export const reconciliationItems = sqliteTable('reconciliation_items', {
+  id: text('id').primaryKey(),
+  batchId: text('batch_id').notNull().references(() => reconciliationBatches.id, { onDelete: 'cascade' }),
+  bankTransactionId: text('bank_transaction_id').references(() => bankTransactions.id),
+  journalLineId: text('journal_line_id').references(() => journalLines.id),
+  // TIPO DE ITEM
+  itemType: text('item_type', { 
+    enum: ['matched', 'outstanding_deposit', 'outstanding_withdrawal', 'bank_error', 'book_error'] 
+  }).notNull(),
+  // MONTOS
+  amountCents: integer('amount_cents').notNull(),
+  // ESTADO
+  isCleared: integer('is_cleared').default(0), // Marcado como conciliado
+  clearedAt: integer('cleared_at', { mode: 'number' }),
+  clearedBy: text('cleared_by').references(() => users.id),
+  // NOTAS
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_recon_item_batch').on(table.batchId),
+  index('idx_recon_item_bank').on(table.bankTransactionId),
+  index('idx_recon_item_journal').on(table.journalLineId),
+  index('idx_recon_item_type').on(table.itemType),
+  index('idx_recon_item_cleared').on(table.isCleared),
+]);
+
+// ============================================
+// TIPOS DRIZZLE PARA LAS NUEVAS TABLAS
+// ============================================
+
+export type BankAccount = InferSelectModel<typeof bankAccounts>;
+export type NewBankAccount = InferInsertModel<typeof bankAccounts>;
+
+export type BankTransaction = InferSelectModel<typeof bankTransactions>;
+export type NewBankTransaction = InferInsertModel<typeof bankTransactions>;
+
+export type ReconciliationBatch = InferSelectModel<typeof reconciliationBatches>;
+export type NewReconciliationBatch = InferInsertModel<typeof reconciliationBatches>;
+
+export type ReconciliationItem = InferSelectModel<typeof reconciliationItems>;
+export type NewReconciliationItem = InferInsertModel<typeof reconciliationItems>;
