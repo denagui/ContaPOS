@@ -1,33 +1,53 @@
+```
 # Dependencies
 node_modules/
 
-# Build output
-.svelte-kit/
-build/
+# Build outputs
 dist/
+build/
+.svelte-kit/
 
-# Environment
+# Environment variables
 .env
 .env.local
-.env.*.local
+*.env.*
 
-# IDE
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.python-version
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# Wrangler
-.wrangler/
-
-# Test coverage
+# Coverage
 coverage/
+htmlcov/
+.coverage
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+```

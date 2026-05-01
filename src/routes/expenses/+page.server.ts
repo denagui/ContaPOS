@@ -1,27 +1,28 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { db } from '$lib/server/db';
-import { expenses, organizations } from '$lib/server/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
-import { generateHaciendaKey } from '$lib/server/utils/hacienda-key';
+import { createExpense, getExpensesByOrganization, getExpenseCategories, deleteExpense } from '$lib/server/services/expense.service';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	// Seguridad: verificar sesión (simulada por ahora)
-	if (!locals.user) {
-		// En producción: redirect('/login')
-	}
-
 	const orgId = locals.organizationId || 'demo-org';
-
-	// Obtener últimos gastos
-	const recentExpenses = await db.query.expenses.findMany({
-		where: and(eq(expenses.organizationId, orgId)),
-		orderBy: [desc(expenses.createdAt)],
-		limit: 5
-	});
-
+	
+	// Obtener gastos y categorías
+	const [expenses, categories] = await Promise.all([
+		getExpensesByOrganization(orgId, 100),
+		getExpenseCategories(orgId)
+	]);
+	
+	// Calcular totales
+	const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+	const totalTax = expenses.reduce((sum, e) => sum + (e.taxAmount || 0), 0);
+	
 	return {
-		recentExpenses,
+		expenses,
+		categories,
+		summary: {
+			totalAmount,
+			totalTax,
+			count: expenses.length
+		},
 		user: locals.user
 	};
 };
@@ -33,10 +34,11 @@ export const actions: Actions = {
 		const amount = parseFloat(formData.get('amount') as string);
 		const category = formData.get('category') as string;
 		const description = formData.get('description') as string;
-		const date = formData.get('date') as string;
-		const paymentMethod = formData.get('paymentMethod') as string;
-		const receiptNumber = formData.get('receiptNumber') as string;
-
+		const dateStr = formData.get('date') as string;
+		const paymentMethod = formData.get('paymentMethod') as 'cash' | 'card' | 'transfer' | 'sinpe' | 'credit';
+		const invoiceNumber = formData.get('invoiceNumber') as string;
+		const taxRate = parseInt(formData.get('taxRate') as string) as 0 | 4 | 8 | 13;
+		
 		// Validaciones básicas
 		if (!amount || isNaN(amount) || amount <= 0) {
 			return fail(400, { error: 'El monto debe ser mayor a 0' });
@@ -44,57 +46,53 @@ export const actions: Actions = {
 		if (!description || description.trim().length === 0) {
 			return fail(400, { error: 'La descripción es requerida' });
 		}
-
-		const orgId = locals.organizationId || 'demo-org';
-
-		// Calcular IVA (asumiendo 13% para gastos operativos, ajustable según categoría)
-		const taxRate = 0.13;
-		const taxAmount = amount * taxRate;
-		const subtotal = amount - taxAmount;
-
-		// Generar Clave de Hacienda (si hay número de comprobante)
-		let haciendaKey = null;
-		if (receiptNumber) {
-			// Obtener info de la organización para la cédula emisor
-			const org = await db.query.organizations.findFirst({
-				where: eq(organizations.id, orgId)
-			});
-			
-			if (org && org.taxId) {
-				haciendaKey = generateHaciendaKey({
-					timestamp: new Date(date),
-					sucursal: '001',
-					terminal: '00001',
-					tipoComprobante: '02', // 02 = Nota de Débito para gastos
-					consecutivo: Math.floor(Math.random() * 99999999),
-					cedulaEmisor: org.taxId
-				});
-			}
+		if (!dateStr) {
+			return fail(400, { error: 'La fecha es requerida' });
 		}
-
+		
+		const orgId = locals.organizationId || 'demo-org';
+		
 		try {
-			await db.insert(expenses).values({
+			await createExpense({
 				organizationId: orgId,
 				amount,
-				subtotal,
-				taxAmount,
-				taxRate,
-				category,
 				description,
-				date: new Date(date),
+				categoryId: category,
+				date: new Date(dateStr),
 				paymentMethod,
-				receiptNumber: receiptNumber || null,
-				haciendaKey,
-				status: 'completed',
-				createdAt: new Date()
+				invoiceNumber: invoiceNumber || undefined,
+				taxRate
 			});
-
+			
 			return {
 				success: true,
 				message: 'Gasto registrado exitosamente'
 			};
 		} catch (error) {
 			console.error('Error al registrar gasto:', error);
+			return fail(500, { error: 'Error interno del servidor' });
+		}
+	},
+	
+	delete_expense: async ({ request, locals }) => {
+		const formData = await request.formData();
+		const expenseId = formData.get('expenseId') as string;
+		
+		if (!expenseId) {
+			return fail(400, { error: 'ID de gasto inválido' });
+		}
+		
+		const orgId = locals.organizationId || 'demo-org';
+		
+		try {
+			await deleteExpense(expenseId, orgId);
+			
+			return {
+				success: true,
+				message: 'Gasto eliminado exitosamente'
+			};
+		} catch (error) {
+			console.error('Error al eliminar gasto:', error);
 			return fail(500, { error: 'Error interno del servidor' });
 		}
 	}

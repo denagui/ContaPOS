@@ -387,3 +387,66 @@ export const paymentInstallments = sqliteTable('payment_installments', {
   index('idx_installments_date').on(table.paymentDate),
   index('idx_installments_created').on(table.createdAt),
 ]);
+
+// ============================================
+// TABLA DE CONTACTOS UNIFICADA (Clientes/Proveedores)
+// ============================================
+
+export const contacts = sqliteTable('contacts', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  // TIPO DE CONTACTO: customer, supplier, both
+  contactType: text('contact_type', { enum: ['customer', 'supplier', 'both'] }).notNull(),
+  // INFORMACIÓN BÁSICA
+  name: text('name').notNull(),
+  tradeName: text('trade_name'), // Nombre comercial (Hacienda)
+  email: text('email'),
+  phone: text('phone'),
+  mobile: text('mobile'),
+  // DOCUMENTOS TRIBUTARIOS COSTA RICA
+  documentType: text('document_type', { 
+    enum: ['cedula_fisica', 'cedula_juridica', 'dimex', 'nite', 'pasaporte'] 
+  }).default('cedula_fisica'),
+  documentNumber: text('document_number'),
+  // DIRECCIÓN COMPLETA
+  province: text('province'),
+  canton: text('canton'),
+  district: text('district'),
+  address: text('address'),
+  postalCode: text('postal_code'),
+  // CRÉDITO
+  creditLimit: real('credit_limit').default(0),
+  currentBalance: real('current_balance').default(0),
+  creditDays: integer('credit_days').default(0),
+  // CÓDIGO CABYS PARA CLIENTES
+  cabysCode: text('cabys_code'),
+  // PUNTOS DE LEALTAD
+  loyaltyPoints: integer('loyalty_points').default(0),
+  // ESTADO
+  active: integer('active').default(1),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_contacts_org').on(table.organizationId),
+  index('idx_contacts_type').on(table.contactType),
+  index('idx_contacts_document').on(table.documentNumber),
+  index('idx_contacts_active').on(table.active),
+]);
+
+// ============================================
+// CONFIGURACIÓN DE ORGANIZACIÓN
+// ============================================
+
+export const organizationSettings = sqliteTable('organization_settings', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id),
+  settingKey: text('setting_key').notNull(),
+  settingValue: text('setting_value').notNull(), // JSON string para valores complejos
+  type: text('type', { enum: ['string', 'number', 'boolean', 'json'] }).default('string'),
+  description: text('description'),
+  createdAt: text('created_at').defaultCurrentTimestamp(),
+  updatedAt: text('updated_at').defaultCurrentTimestamp(),
+}, (table) => [
+  index('idx_org_settings_org').on(table.organizationId),
+  index('idx_org_settings_key').on(table.settingKey),
+]);

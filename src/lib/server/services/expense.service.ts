@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { expenses, organization_settings } from '$lib/server/db/schema';
+import { expenses, organizationSettings } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateHaciendaKey } from '../utils/hacienda-key';
 
@@ -9,8 +9,8 @@ export interface CreateExpenseInput {
   amount: number;
   description: string;
   categoryId?: string;
-  supplierId?: number; // contact_id
-  paymentMethod: 'cash' | 'card' | 'transfer' | 'credit';
+  supplierId?: string; // contact_id
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'sinpe' | 'credit';
   taxRate?: 0 | 4 | 8 | 13;
   invoiceNumber?: string;
   receiptXml?: string;
@@ -30,18 +30,16 @@ export async function createExpense(input: CreateExpenseInput) {
 
   const [newExpense] = await db.insert(expenses).values({
     organizationId: input.organizationId,
-    date: input.date,
+    date: input.date.toISOString(),
     amount: input.amount,
     subtotal: subtotal,
     taxAmount: taxAmount,
     taxRate: input.taxRate || 13,
     description: input.description,
-    categoryId: input.categoryId,
-    supplierId: input.supplierId,
+    category: input.categoryId || 'other',
     paymentMethod: input.paymentMethod,
-    invoiceNumber: input.invoiceNumber,
+    receiptNumber: input.invoiceNumber,
     haciendaKey: haciendaKey,
-    receiptXml: input.receiptXml,
     status: 'completed',
   }).returning();
 
@@ -68,7 +66,7 @@ export async function getExpensesByDateRange(
     .orderBy(desc(expenses.date));
 }
 
-export async function deleteExpense(id: number, organizationId: string) {
+export async function deleteExpense(id: string, organizationId: string) {
   await db.delete(expenses)
     .where(and(eq(expenses.id, id), eq(expenses.organizationId, organizationId)));
 }
@@ -85,4 +83,34 @@ export async function getExpenseCategories(organizationId: string) {
     { id: 'maintenance', name: 'Mantenimiento', type: 'variable' },
     { id: 'other', name: 'Otros Gastos', type: 'variable' },
   ];
+}
+
+export async function getOrganizationSetting(organizationId: string, key: string) {
+  const [setting] = await db.select().from(organizationSettings)
+    .where(and(
+      eq(organizationSettings.organizationId, organizationId),
+      eq(organizationSettings.settingKey, key)
+    ));
+  
+  return setting?.settingValue || null;
+}
+
+export async function setOrganizationSetting(organizationId: string, key: string, value: string, type: 'string' | 'number' | 'boolean' | 'json' = 'string') {
+  const existing = await getOrganizationSetting(organizationId, key);
+  
+  if (existing) {
+    await db.update(organizationSettings)
+      .set({ settingValue: value, type, updatedAt: new Date().toISOString() })
+      .where(and(
+        eq(organizationSettings.organizationId, organizationId),
+        eq(organizationSettings.settingKey, key)
+      ));
+  } else {
+    await db.insert(organizationSettings).values({
+      organizationId,
+      settingKey: key,
+      settingValue: value,
+      type,
+    });
+  }
 }
