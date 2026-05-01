@@ -90,6 +90,7 @@ export const products = sqliteTable('products', {
 
 export const sales = sqliteTable('sales', {
   id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id), // SCOPED DB
   saleNumber: text('sale_number').unique().notNull(),
   branchId: text('branch_id').references(() => branches.id),
   contactId: text('contact_id').references(() => contacts.id),
@@ -113,10 +114,11 @@ export const sales = sqliteTable('sales', {
   // ISO 42001: Explicación de decisiones automatizadas
   aiExplanation: text('ai_explanation'),
   confidenceScore: real('confidence_score'),
-  // Epoch 13 - NIIF compliant
+  // EPOCH 13 - NIIF compliant
   createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
   updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
 }, (table) => [
+  index('idx_sales_org').on(table.organizationId), // SCOPED DB
   index('idx_sales_contact').on(table.contactId),
   index('idx_sales_user').on(table.userId),
   index('idx_sales_branch').on(table.branchId),
@@ -709,4 +711,55 @@ export const aiDecisionsLog = sqliteTable('ai_decisions_log', {
   index('idx_ai_decisions_risk').on(table.riskLevel),
   index('idx_ai_decisions_review').on(table.requiresReview),
   index('idx_ai_decisions_date').on(table.createdAt),
+]);
+
+// ============================================
+// CIERRES CONTABLES (NIIF/IFRS)
+// ============================================
+// Períodos contables bloqueados para evitar modificaciones
+// Cumplimiento normativo: No se pueden modificar transacciones de períodos cerrados
+// ============================================
+
+export const accountingPeriods = sqliteTable('accounting_periods', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').references(() => organizations.id).notNull(),
+  periodName: text('period_name').notNull(), // Ej: "Enero 2024", "Q1 2024"
+  startDate: integer('start_date', { mode: 'number' }).notNull(), // Epoch 13
+  endDate: integer('end_date', { mode: 'number' }).notNull(), // Epoch 13
+  // ESTADO DEL PERÍODO
+  status: text('status', {
+    enum: ['open', 'soft_close', 'closed', 'locked']
+  }).default('open').notNull(),
+  // open: Se pueden crear/modificar transacciones
+  // soft_close: Solo lectura, requiere aprobación para cambios
+  // closed: Cierre contable completo, solo asientos de ajuste
+  // locked: Bloqueo total por auditoría o normativa
+  
+  // CONTROL DE CAMBIOS
+  canCreate: integer('can_create').default(1),
+  canModify: integer('can_modify').default(1),
+  canDelete: integer('can_delete').default(0), // Nunca permitir borrar en período cerrado
+  requiresApproval: integer('requires_approval').default(0),
+  
+  // METADATOS DE CIERRE
+  closedBy: text('closed_by').references(() => users.id),
+  closedAt: integer('closed_at', { mode: 'number' }),
+  closedReason: text('closed_reason'), // Justificación del cierre
+  approvedBy: text('approved_by').references(() => users.id), // Auditor o contador
+  approvedAt: integer('approved_at', { mode: 'number' }),
+  
+  // INDICADORES DE CALIDAD
+  hasDiscrepancies: integer('has_discrepancies').default(0),
+  reconciliationStatus: text('reconciliation_status', {
+    enum: ['pending', 'reconciled', 'discrepancy']
+  }).default('pending'),
+  
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+  updatedAt: integer('updated_at', { mode: 'number' }).$defaultFn(() => Date.now()),
+}, (table) => [
+  index('idx_period_org').on(table.organizationId),
+  index('idx_period_dates').on(table.startDate, table.endDate),
+  index('idx_period_status').on(table.status),
+  index('idx_period_closed').on(table.closedAt),
 ]);
