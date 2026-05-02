@@ -87,6 +87,7 @@ declare module '$env/static/private' {
 	export const PYGAME_HIDE_SUPPORT_PROMPT: string;
 	export const INIT_CWD: string;
 	export const EDITOR: string;
+	export const NODE_ENV: string;
 }
 
 /**
@@ -222,6 +223,7 @@ declare module '$env/dynamic/private' {
 		PYGAME_HIDE_SUPPORT_PROMPT: string;
 		INIT_CWD: string;
 		EDITOR: string;
+		NODE_ENV: string;
 		[key: `PUBLIC_${string}`]: undefined;
 		[key: `${string}`]: string | undefined;
 	}
