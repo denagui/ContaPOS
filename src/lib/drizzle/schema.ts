@@ -2,6 +2,13 @@ import { sqliteTable, text, real, integer, index } from 'drizzle-orm/sqlite-core
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 
 // ============================================
+// TIPOS EXPORTADOS PARA USO EN LA APLICACIÓN
+// ============================================
+export type IndustryType = 'retail' | 'restaurant' | 'services' | 'utilities' | 'accounting';
+export type TaxpayerType = 'ordinary' | 'large' | 'special' | 'franchise';
+export type IvaRegime = 'general' | 'simplified' | 'exempt';
+
+// ============================================
 // UTILIDADES PARA FECHAS EPOCH 13
 // ============================================
 // Todas las fechas se almacenan como INTEGER (Epoch 13 - milisegundos)

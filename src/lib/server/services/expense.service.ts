@@ -23,10 +23,12 @@ export async function createExpense(input: CreateExpenseInput) {
   
   // Generar clave de hacienda para el gasto (comprobante de proveedor o interno)
   const haciendaKey = input.invoiceNumber || generateHaciendaKey({
-    companyId: input.companyId,
-    date: input.date,
-    type: 'expense',
-    sequential: Math.floor(Math.random() * 1000000)
+    timestamp: input.date,
+    sucursal: '001',
+    terminal: '00001',
+    tipoComprobante: '05', // Gasto
+    consecutivo: Math.floor(Math.random() * 1000000),
+    cedulaEmisor: '123456789'
   });
 
   const [newExpense] = await db.insert(expenses).values({

@@ -1,4 +1,7 @@
-import type { UserRole, IndustryType } from '../db/schema';
+import type { IndustryType } from '../drizzle/schema';
+
+// Tipos para roles (definidos inline ya que no hay un tipo exportado en el schema)
+type UserRole = 'owner' | 'admin' | 'cashier' | 'inventory_manager' | 'accountant';
 
 export interface ModulePermission {
   read: boolean;
