@@ -38,65 +38,55 @@
  * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
  */
 declare module '$env/static/private' {
-	export const NODE_ENV: string;
-	export const CF_ACCOUNT_ID: string;
-	export const CF_API_TOKEN: string;
-	export const ANTIGRAVITY_AGENT: string;
-	export const NVM_INC: string;
-	export const NODE: string;
-	export const INIT_CWD: string;
-	export const NVM_CD_FLAGS: string;
-	export const TERM: string;
-	export const SHELL: string;
-	export const TMPDIR: string;
-	export const npm_config_global_prefix: string;
-	export const MallocNanoZone: string;
-	export const COLOR: string;
-	export const npm_config_noproxy: string;
-	export const npm_config_local_prefix: string;
-	export const NVM_DIR: string;
+	export const SUDO_GID: string;
+	export const TMUX: string;
+	export const MAIL: string;
 	export const USER: string;
-	export const COMMAND_MODE: string;
-	export const npm_config_globalconfig: string;
-	export const SSH_AUTH_SOCK: string;
-	export const __CF_USER_TEXT_ENCODING: string;
-	export const npm_execpath: string;
-	export const PAGER: string;
-	export const PATH: string;
-	export const npm_package_json: string;
-	export const _: string;
-	export const npm_config_userconfig: string;
-	export const npm_config_init_module: string;
-	export const __CFBundleIdentifier: string;
-	export const npm_command: string;
-	export const PWD: string;
-	export const npm_lifecycle_event: string;
-	export const EDITOR: string;
-	export const npm_package_name: string;
-	export const LANG: string;
-	export const ANTIGRAVITY_EDITOR_APP_ROOT: string;
-	export const npm_config_npm_version: string;
-	export const XPC_FLAGS: string;
-	export const npm_config_node_gyp: string;
-	export const npm_package_version: string;
-	export const XPC_SERVICE_NAME: string;
-	export const SHLVL: string;
-	export const HOME: string;
-	export const ANTIGRAVITY_TRAJECTORY_ID: string;
-	export const VSCODE_NLS_CONFIG: string;
-	export const npm_config_cache: string;
-	export const LOGNAME: string;
-	export const npm_lifecycle_script: string;
-	export const VSCODE_IPC_HOOK: string;
-	export const VSCODE_CODE_CACHE_PATH: string;
-	export const NVM_BIN: string;
 	export const npm_config_user_agent: string;
-	export const VSCODE_PID: string;
-	export const OSLogRateLimit: string;
-	export const VSCODE_CWD: string;
 	export const npm_node_execpath: string;
+	export const SHLVL: string;
+	export const npm_config_noproxy: string;
+	export const HOME: string;
+	export const OLDPWD: string;
+	export const TERM_PROGRAM_VERSION: string;
+	export const npm_package_json: string;
+	export const PS1: string;
+	export const npm_config_userconfig: string;
+	export const npm_config_local_prefix: string;
+	export const PS2: string;
+	export const COLOR: string;
+	export const SUDO_UID: string;
+	export const LOGNAME: string;
+	export const _: string;
 	export const npm_config_prefix: string;
-	export const VITE_USER_NODE_ENV: string;
+	export const npm_config_npm_version: string;
+	export const TERM: string;
+	export const npm_config_cache: string;
+	export const npm_config_node_gyp: string;
+	export const PATH: string;
+	export const NODE: string;
+	export const npm_package_name: string;
+	export const TIKTOKEN_CACHE_DIR: string;
+	export const LANG: string;
+	export const TERM_PROGRAM: string;
+	export const npm_lifecycle_script: string;
+	export const SUDO_COMMAND: string;
+	export const SHELL: string;
+	export const npm_package_version: string;
+	export const npm_lifecycle_event: string;
+	export const PROMPT_COMMAND: string;
+	export const SUDO_USER: string;
+	export const npm_config_globalconfig: string;
+	export const npm_config_init_module: string;
+	export const PWD: string;
+	export const LC_ALL: string;
+	export const npm_execpath: string;
+	export const npm_config_global_prefix: string;
+	export const npm_command: string;
+	export const TMUX_PANE: string;
+	export const PYGAME_HIDE_SUPPORT_PROMPT: string;
+	export const INIT_CWD: string;
+	export const EDITOR: string;
 }
 
 /**
@@ -133,7 +123,7 @@ declare module '$env/static/private' {
  * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
  */
 declare module '$env/static/public' {
-	export const PUBLIC_API_URL: string;
+	
 }
 
 /**
@@ -183,65 +173,55 @@ declare module '$env/static/public' {
  */
 declare module '$env/dynamic/private' {
 	export const env: {
-		NODE_ENV: string;
-		CF_ACCOUNT_ID: string;
-		CF_API_TOKEN: string;
-		ANTIGRAVITY_AGENT: string;
-		NVM_INC: string;
-		NODE: string;
-		INIT_CWD: string;
-		NVM_CD_FLAGS: string;
-		TERM: string;
-		SHELL: string;
-		TMPDIR: string;
-		npm_config_global_prefix: string;
-		MallocNanoZone: string;
-		COLOR: string;
-		npm_config_noproxy: string;
-		npm_config_local_prefix: string;
-		NVM_DIR: string;
+		SUDO_GID: string;
+		TMUX: string;
+		MAIL: string;
 		USER: string;
-		COMMAND_MODE: string;
-		npm_config_globalconfig: string;
-		SSH_AUTH_SOCK: string;
-		__CF_USER_TEXT_ENCODING: string;
-		npm_execpath: string;
-		PAGER: string;
-		PATH: string;
-		npm_package_json: string;
-		_: string;
-		npm_config_userconfig: string;
-		npm_config_init_module: string;
-		__CFBundleIdentifier: string;
-		npm_command: string;
-		PWD: string;
-		npm_lifecycle_event: string;
-		EDITOR: string;
-		npm_package_name: string;
-		LANG: string;
-		ANTIGRAVITY_EDITOR_APP_ROOT: string;
-		npm_config_npm_version: string;
-		XPC_FLAGS: string;
-		npm_config_node_gyp: string;
-		npm_package_version: string;
-		XPC_SERVICE_NAME: string;
-		SHLVL: string;
-		HOME: string;
-		ANTIGRAVITY_TRAJECTORY_ID: string;
-		VSCODE_NLS_CONFIG: string;
-		npm_config_cache: string;
-		LOGNAME: string;
-		npm_lifecycle_script: string;
-		VSCODE_IPC_HOOK: string;
-		VSCODE_CODE_CACHE_PATH: string;
-		NVM_BIN: string;
 		npm_config_user_agent: string;
-		VSCODE_PID: string;
-		OSLogRateLimit: string;
-		VSCODE_CWD: string;
 		npm_node_execpath: string;
+		SHLVL: string;
+		npm_config_noproxy: string;
+		HOME: string;
+		OLDPWD: string;
+		TERM_PROGRAM_VERSION: string;
+		npm_package_json: string;
+		PS1: string;
+		npm_config_userconfig: string;
+		npm_config_local_prefix: string;
+		PS2: string;
+		COLOR: string;
+		SUDO_UID: string;
+		LOGNAME: string;
+		_: string;
 		npm_config_prefix: string;
-		VITE_USER_NODE_ENV: string;
+		npm_config_npm_version: string;
+		TERM: string;
+		npm_config_cache: string;
+		npm_config_node_gyp: string;
+		PATH: string;
+		NODE: string;
+		npm_package_name: string;
+		TIKTOKEN_CACHE_DIR: string;
+		LANG: string;
+		TERM_PROGRAM: string;
+		npm_lifecycle_script: string;
+		SUDO_COMMAND: string;
+		SHELL: string;
+		npm_package_version: string;
+		npm_lifecycle_event: string;
+		PROMPT_COMMAND: string;
+		SUDO_USER: string;
+		npm_config_globalconfig: string;
+		npm_config_init_module: string;
+		PWD: string;
+		LC_ALL: string;
+		npm_execpath: string;
+		npm_config_global_prefix: string;
+		npm_command: string;
+		TMUX_PANE: string;
+		PYGAME_HIDE_SUPPORT_PROMPT: string;
+		INIT_CWD: string;
+		EDITOR: string;
 		[key: `PUBLIC_${string}`]: undefined;
 		[key: `${string}`]: string | undefined;
 	}
@@ -297,7 +277,6 @@ declare module '$env/dynamic/private' {
  */
 declare module '$env/dynamic/public' {
 	export const env: {
-		PUBLIC_API_URL: string;
 		[key: `PUBLIC_${string}`]: string | undefined;
 	}
 }

@@ -3,11 +3,15 @@ export { drizzle } from 'drizzle-orm/d1';
 export type { DrizzleD1Database } from 'drizzle-orm/d1';
 
 // Exportar esquema completo
-export * from '../../../drizzle/schema';
+export * from '../../drizzle/schema';
 
 // Exportar funciones de conexión
-export { createDb, getDb } from '../../../drizzle/db';
-export type { Database } from '../../../drizzle/db';
+export { createDb, getDb } from '../../drizzle/db';
+export type { Database } from '../../drizzle/db';
+
+// Export default db instance for services that expect it
+// This will be initialized at runtime with the proper D1 database
+export const db: any = null; // Placeholder - actual db instance comes from platform context
 
 /**
  * Helper para obtener el scope (organización y sucursal) del contexto

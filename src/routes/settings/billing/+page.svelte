@@ -251,7 +251,7 @@
     <!-- Botón Eliminar Configuración -->
     {#if data.isConfigured}
       <div class="mt-6 pt-6 border-t">
-        <form method="POST" action="?/delete" use:enhance onsubmit="return confirm('¿Estás seguro de eliminar esta configuración? Esta acción no se puede deshacer.')">
+        <form method="POST" action="?/delete" use:enhance onsubmit={(e) => { if (!confirm('¿Estás seguro de eliminar esta configuración? Esta acción no se puede deshacer.')) { e.preventDefault(); } }}>
           <button
             type="submit"
             class="w-full bg-red-50 text-red-700 px-6 py-3 rounded-md hover:bg-red-100 transition-colors font-medium border border-red-200"
