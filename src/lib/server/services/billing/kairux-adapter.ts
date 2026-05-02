@@ -33,7 +33,7 @@ export class KairuxAdapter implements BillingAdapter {
    * Inicializar el adapter con configuración específica
    */
   async initialize(config: Record<string, unknown>): Promise<void> {
-    const kairuxConfig = config as KairuxConfig;
+    const kairuxConfig = config as unknown as KairuxConfig;
     
     if (!kairuxConfig.providerType || kairuxConfig.providerType !== 'kairux_native') {
       throw new Error('Invalid configuration for KairuxAdapter');
@@ -145,6 +145,7 @@ export class KairuxAdapter implements BillingAdapter {
       // Generar mensaje receptor para cancelación
       const cancellationKey = this.generateDocumentKey({
         documentType: '03', // Nota de crédito por cancelación
+        issueDate: Date.now(),
         emitter: { taxId: '', name: '', address: { line1: '', city: '', province: '' } },
         currency: 'CRC',
         items: [],

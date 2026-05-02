@@ -56,7 +56,7 @@ export class BillingOrchestrator {
     this.adapterType = config.providerType;
 
     // 3. Inicializar el adapter
-    await this.adapter.initialize(config as Record<string, unknown>);
+    await this.adapter.initialize(config as unknown as Record<string, unknown>);
 
     console.log(`[BillingOrchestrator] Initialized with provider: ${this.adapter.providerName}`);
   }
@@ -263,7 +263,7 @@ export class BillingOrchestrator {
    * Factory method para crear el adapter correcto según configuración
    */
   private async createAdapter(config: BillingConfig): Promise<BillingAdapter> {
-    switch (config.providerType) {
+    switch (config.providerType as string) {
       case 'kairux_native':
         return new KairuxAdapter();
       

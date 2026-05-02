@@ -31,7 +31,7 @@ export class GenericApiAdapter implements BillingAdapter {
    * Inicializar el adapter con configuración específica
    */
   async initialize(config: Record<string, unknown>): Promise<void> {
-    const genericConfig = config as GenericApiConfig;
+    const genericConfig = config as unknown as GenericApiConfig;
 
     if (!genericConfig.providerType || genericConfig.providerType !== 'generic_api') {
       throw new Error('Invalid configuration for GenericApiAdapter');
