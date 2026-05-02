@@ -50,13 +50,9 @@ export class GenericApiAdapter implements BillingAdapter {
   /**
    * Enviar documento electrónico a la API externa
    */
-  async sendDocument(invoice: ElectronicInvoice): Promise<BillingResponse | BillingError> {
+  async sendDocument(invoice: ElectronicInvoice): Promise<BillingResponse> {
     if (!this.initialized || !this.config) {
-      return {
-        success: false,
-        errorCode: 'NOT_INITIALIZED',
-        message: 'GenericApiAdapter not initialized. Call initialize() first.',
-      };
+      throw new Error('GenericApiAdapter not initialized. Call initialize() first.');
     }
 
     try {

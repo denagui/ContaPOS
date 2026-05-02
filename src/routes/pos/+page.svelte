@@ -89,9 +89,7 @@
 		}
 	}
 
-	function get total() {
-		return cart.reduce((sum, item) => sum + item.subtotal, 0);
-	}
+	const total = $derived(cart.reduce((sum: number, item: any) => sum + item.subtotal, 0));
 
 	async function processPayment(method: 'cash' | 'card' | 'transfer' | 'credit') {
 		if (cart.length === 0) return;

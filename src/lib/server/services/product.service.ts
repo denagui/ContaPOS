@@ -1,7 +1,11 @@
 import { eq, like, desc, and, sql } from 'drizzle-orm';
 import type { Database } from '$lib/server/db';
-import { products, categories, inventoryMovements } from '$lib/server/db';
-import { generateId } from 'oslo';
+import { products, categories, inventoryMovements } from '$lib/server/db/schema';
+import { generateRandomString, alphabet } from 'oslo/crypto';
+
+function generateId(length: number): string {
+  return generateRandomString(length, alphabet('0-9', 'a-z', 'A-Z'));
+}
 
 export interface CreateProductDTO {
   sku: string;
@@ -71,12 +75,22 @@ export class ProductService {
 
   async create(data: CreateProductDTO, userId?: string) {
     const id = generateId(15);
-    const now = new Date().toISOString();
+    const now = Date.now();
 
     // Insertar producto
     await this.db.insert(products).values({
       id,
-      ...data,
+      sku: data.sku,
+      barcode: data.barcode,
+      name: data.name,
+      description: data.description,
+      categoryId: data.categoryId,
+      costPrice: data.costPrice,
+      salePrice: data.salePrice,
+      stockQuantity: data.stockQuantity,
+      minStock: data.minStock,
+      unit: data.unit,
+      imageUrl: data.imageUrl,
       taxable: data.taxable ? 1 : 0,
       createdAt: now,
       updatedAt: now,
@@ -109,16 +123,29 @@ export class ProductService {
     }
 
     const { id, ...updateData } = data;
-    const now = new Date().toISOString();
+    const now = Date.now();
 
     // Actualizar producto
+    const setValues: any = {
+      updatedAt: now,
+    };
+    
+    if (updateData.sku !== undefined) setValues.sku = updateData.sku;
+    if (updateData.barcode !== undefined) setValues.barcode = updateData.barcode;
+    if (updateData.name !== undefined) setValues.name = updateData.name;
+    if (updateData.description !== undefined) setValues.description = updateData.description;
+    if (updateData.categoryId !== undefined) setValues.categoryId = updateData.categoryId;
+    if (updateData.costPrice !== undefined) setValues.costPrice = updateData.costPrice;
+    if (updateData.salePrice !== undefined) setValues.salePrice = updateData.salePrice;
+    if (updateData.stockQuantity !== undefined) setValues.stockQuantity = updateData.stockQuantity;
+    if (updateData.minStock !== undefined) setValues.minStock = updateData.minStock;
+    if (updateData.unit !== undefined) setValues.unit = updateData.unit;
+    if (updateData.imageUrl !== undefined) setValues.imageUrl = updateData.imageUrl;
+    if (updateData.taxable !== undefined) setValues.taxable = updateData.taxable ? 1 : 0;
+
     await this.db
       .update(products)
-      .set({
-        ...updateData,
-        taxable: updateData.taxable ? 1 : 0,
-        updatedAt: now,
-      })
+      .set(setValues)
       .where(eq(products.id, id));
 
     return await this.getById(id);
@@ -145,14 +172,14 @@ export class ProductService {
       throw new Error('Producto no encontrado');
     }
 
-    const previousStock = product.stockQuantity;
+    const previousStock = product.stockQuantity || 0;
     const newStock = previousStock + quantity;
 
     if (newStock < 0) {
       throw new Error('No hay suficiente stock');
     }
 
-    const now = new Date().toISOString();
+    const now = Date.now();
 
     // Registrar movimiento
     await this.db.insert(inventoryMovements).values({

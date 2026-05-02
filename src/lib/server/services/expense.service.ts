@@ -1,12 +1,12 @@
 import { db } from '$lib/server/db';
-import { expenses, organizationSettings } from '$lib/server/db/schema';
+import { expenses, companySettings } from '$lib/server/db/schema';
 import { eq, and, desc, sum, sql } from 'drizzle-orm';
 import { generateHaciendaKey } from '../utils/hacienda-key';
 
 export interface CreateExpenseInput {
-  organizationId: string;
+  companyId: string;
   date: Date;
-  amount: number;
+  amountCents: number;
   description: string;
   categoryId?: string;
   niifCategory?: 'cost_of_sales' | 'operating_expense' | 'employee_benefit' | 'depreciation' | 'financial_expense' | 'other_expense' | 'non_operating_expense';
@@ -18,23 +18,23 @@ export interface CreateExpenseInput {
 }
 
 export async function createExpense(input: CreateExpenseInput) {
-  const taxAmount = input.amount * (input.taxRate || 0) / 100;
-  const subtotal = input.amount - taxAmount;
-
+  const taxAmountCents = Math.round(input.amountCents * (input.taxRate || 0) / 100);
+  const subtotalCents = input.amountCents - taxAmountCents;
+  
   // Generar clave de hacienda para el gasto (comprobante de proveedor o interno)
   const haciendaKey = input.invoiceNumber || generateHaciendaKey({
-    organizationId: input.organizationId,
+    companyId: input.companyId,
     date: input.date,
     type: 'expense',
     sequential: Math.floor(Math.random() * 1000000)
   });
 
   const [newExpense] = await db.insert(expenses).values({
-    organizationId: input.organizationId,
+    companyId: input.companyId,
     date: input.date.getTime(), // Epoch 13
-    amount: input.amount,
-    subtotal: subtotal,
-    taxAmount: taxAmount,
+    amountCents: input.amountCents,
+    subtotalCents: subtotalCents,
+    taxAmountCents: taxAmountCents,
     taxRate: input.taxRate || 13,
     description: input.description,
     category: input.categoryId || 'other',
@@ -48,21 +48,21 @@ export async function createExpense(input: CreateExpenseInput) {
   return newExpense;
 }
 
-export async function getExpensesByOrganization(organizationId: string, limit = 50) {
+export async function getExpensesByCompany(companyId: string, limit = 50) {
   return await db.select().from(expenses)
-    .where(eq(expenses.organizationId, organizationId))
+    .where(eq(expenses.companyId, companyId))
     .orderBy(desc(expenses.date))
     .limit(limit);
 }
 
 export async function getExpensesByDateRange(
-  organizationId: string,
+  companyId: string,
   startDate: Date,
   endDate: Date
 ) {
   return await db.select().from(expenses)
     .where(and(
-      eq(expenses.organizationId, organizationId),
+      eq(expenses.companyId, companyId),
       sql`${expenses.date} >= ${startDate.getTime()}`,
       sql`${expenses.date} <= ${endDate.getTime()}`
     ))
@@ -70,20 +70,20 @@ export async function getExpensesByDateRange(
 }
 
 export async function getNiifSummary(
-  organizationId: string,
+  companyId: string,
   startDate: Date,
   endDate: Date
 ) {
   const result = await db.select({
     niifCategory: expenses.niifCategory,
-    totalAmount: sum(expenses.amount).mapWith(Number),
-    totalSubtotal: sum(expenses.subtotal).mapWith(Number),
-    totalTax: sum(expenses.taxAmount).mapWith(Number),
+    totalAmountCents: sum(expenses.amountCents).mapWith(Number),
+    totalSubtotalCents: sum(expenses.subtotalCents).mapWith(Number),
+    totalTaxCents: sum(expenses.taxAmountCents).mapWith(Number),
     count: sql<number>`COUNT(*)`
   })
   .from(expenses)
   .where(and(
-    eq(expenses.organizationId, organizationId),
+    eq(expenses.companyId, companyId),
     sql`${expenses.date} >= ${startDate.getTime()}`,
     sql`${expenses.date} <= ${endDate.getTime()}`
   ))
@@ -92,9 +92,9 @@ export async function getNiifSummary(
   return result;
 }
 
-export async function deleteExpense(id: string, organizationId: string) {
+export async function deleteExpense(id: string, companyId: string) {
   await db.delete(expenses)
-    .where(and(eq(expenses.id, id), eq(expenses.organizationId, organizationId)));
+    .where(and(eq(expenses.id, id), eq(expenses.companyId, companyId)));
 }
 
 export const NIIF_CATEGORIES = {
@@ -115,37 +115,37 @@ export const NIIF_CATEGORIES = {
   ] as const
 };
 
-export async function getExpenseCategories(organizationId: string) {
+export async function getExpenseCategories(companyId: string) {
   return NIIF_CATEGORIES.expenses;
 }
 
-export async function getRevenueCategories(organizationId: string) {
+export async function getRevenueCategories(companyId: string) {
   return NIIF_CATEGORIES.revenues;
 }
 
-export async function getOrganizationSetting(organizationId: string, key: string) {
-  const [setting] = await db.select().from(organizationSettings)
+export async function getCompanySetting(companyId: string, key: string) {
+  const [setting] = await db.select().from(companySettings)
     .where(and(
-      eq(organizationSettings.organizationId, organizationId),
-      eq(organizationSettings.settingKey, key)
+      eq(companySettings.companyId, companyId),
+      eq(companySettings.settingKey, key)
     ));
 
   return setting?.settingValue || null;
 }
 
-export async function setOrganizationSetting(organizationId: string, key: string, value: string, type: 'string' | 'number' | 'boolean' | 'json' = 'string') {
-  const existing = await getOrganizationSetting(organizationId, key);
+export async function setCompanySetting(companyId: string, key: string, value: string, type: 'string' | 'number' | 'boolean' | 'json' = 'string') {
+  const existing = await getCompanySetting(companyId, key);
 
   if (existing) {
-    await db.update(organizationSettings)
+    await db.update(companySettings)
       .set({ settingValue: value, type, updatedAt: new Date().toISOString() })
       .where(and(
-        eq(organizationSettings.organizationId, organizationId),
-        eq(organizationSettings.settingKey, key)
+        eq(companySettings.companyId, companyId),
+        eq(companySettings.settingKey, key)
       ));
   } else {
-    await db.insert(organizationSettings).values({
-      organizationId,
+    await db.insert(companySettings).values({
+      companyId,
       settingKey: key,
       settingValue: value,
       type,

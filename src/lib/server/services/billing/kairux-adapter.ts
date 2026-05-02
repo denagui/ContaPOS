@@ -48,13 +48,9 @@ export class KairuxAdapter implements BillingAdapter {
   /**
    * Enviar documento electrónico a timbrar/firmar
    */
-  async sendDocument(invoice: ElectronicInvoice): Promise<BillingResponse | BillingError> {
+  async sendDocument(invoice: ElectronicInvoice): Promise<BillingResponse> {
     if (!this.initialized) {
-      return {
-        success: false,
-        errorCode: 'NOT_INITIALIZED',
-        message: 'KairuxAdapter not initialized. Call initialize() first.',
-      };
+      throw new Error('KairuxAdapter not initialized. Call initialize() first.');
     }
 
     try {
@@ -224,7 +220,9 @@ export class KairuxAdapter implements BillingAdapter {
     
     for (const item of invoice.items) {
       page.drawText(`${item.quantity} x ${item.description}`, { x: 50, y, size: 10, font });
-      page.drawText(`₡${item.totalAmount.toFixed(2)}`, { x: 500, y, size: 10, font, align: 'right' });
+      const amountText = `₡${item.totalAmount.toFixed(2)}`;
+      const amountWidth = font.widthOfTextAtSize(amountText, 10);
+      page.drawText(amountText, { x: 500 - amountWidth, y, size: 10, font });
       y -= 15;
     }
     
