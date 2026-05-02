@@ -1,9 +1,11 @@
 import { db } from '$lib/server/db';
-import { contacts, type ContactType } from '$lib/server/db/schema';
-import { eq, and, like, or, desc } from 'drizzle-orm';
+import { contacts } from '$lib/server/db/schema';
+import { eq, and, like, or, desc, sql, type SQL } from 'drizzle-orm';
+
+export type ContactType = 'customer' | 'supplier' | 'both';
 
 export interface CreateContactInput {
-  organizationId: string;
+  companyId: string;
   name: string;
   contactType: ContactType;
   tradeName?: string;
@@ -15,7 +17,7 @@ export interface CreateContactInput {
   canton?: string;
   district?: string;
   postalCode?: string;
-  documentType?: 'cedula_fisica' | 'cedula_juridica' | 'dimex' | 'nite' | 'pasaporte';
+  documentType?: 'cedula_fisica' | 'cedula_juridica' | 'dimex' | 'nite' | 'pasaporte' | 'extranjero_no_domiciliado' | 'no_contribuyente';
   documentNumber?: string;
   creditLimit?: number;
   creditDays?: number;
@@ -29,7 +31,7 @@ export async function createContact(input: CreateContactInput) {
   }
 
   const [newContact] = await db.insert(contacts).values({
-    organizationId: input.organizationId,
+    companyId: input.companyId,
     name: input.name,
     contactType: input.contactType,
     tradeName: input.tradeName,
@@ -52,22 +54,23 @@ export async function createContact(input: CreateContactInput) {
   return newContact;
 }
 
-export async function getContactsByOrganization(organizationId: string, contactType?: string, search?: string) {
-  let conditions = [eq(contacts.organizationId, organizationId), eq(contacts.active, 1)];
+export async function getContactsByCompany(companyId: string, contactType?: string, search?: string) {
+  let conditions: SQL[] = [eq(contacts.companyId, companyId), eq(contacts.active, 1)];
   
   if (contactType && contactType !== 'both') {
     conditions.push(eq(contacts.contactType, contactType as ContactType));
   }
   
   if (search) {
-    conditions.push(
-      or(
-        like(contacts.name, `%${search}%`),
-        like(contacts.email, `%${search}%`),
-        like(contacts.phone, `%${search}%`),
-        like(contacts.documentNumber, `%${search}%`)
-      )
+    const searchCondition = or(
+      like(contacts.name, `%${search}%`),
+      like(contacts.email, `%${search}%`),
+      like(contacts.phone, `%${search}%`),
+      like(contacts.documentNumber, `%${search}%`)
     );
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
 
   return await db.select().from(contacts)
@@ -75,35 +78,35 @@ export async function getContactsByOrganization(organizationId: string, contactT
     .orderBy(desc(contacts.createdAt));
 }
 
-export async function getContactById(id: string, organizationId: string) {
+export async function getContactById(id: string, companyId: string) {
   const [contact] = await db.select().from(contacts)
-    .where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId)));
+    .where(and(eq(contacts.id, id), eq(contacts.companyId, companyId)));
   
   if (!contact) throw new Error('Contacto no encontrado');
   return contact;
 }
 
-export async function updateContact(id: string, organizationId: string, updates: Partial<CreateContactInput>) {
+export async function updateContact(id: string, companyId: string, updates: Partial<CreateContactInput>) {
   if (updates.documentNumber && !isValidCostaRicaDocument(updates.documentNumber, updates.documentType)) {
     throw new Error('Documento tributario inválido');
   }
 
+  const updateData: any = { ...updates, updatedAt: Date.now() };
+  delete updateData.companyId; // No actualizar companyId
+  
   const [updated] = await db.update(contacts)
-    .set({
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId)))
+    .set(updateData)
+    .where(and(eq(contacts.id, id), eq(contacts.companyId, companyId)))
     .returning();
 
   return updated;
 }
 
-export async function deleteContact(id: string, organizationId: string) {
+export async function deleteContact(id: string, companyId: string) {
   // Soft delete
   await db.update(contacts)
-    .set({ active: 0, updatedAt: new Date().toISOString() })
-    .where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId)));
+    .set({ active: 0, updatedAt: Date.now() })
+    .where(and(eq(contacts.id, id), eq(contacts.companyId, companyId)));
 }
 
 // Validador de documentos CR
@@ -133,10 +136,10 @@ function isValidCostaRicaDocument(documentNumber: string, documentType?: string)
   }
 }
 
-export async function getCustomersWithDebt(organizationId: string) {
+export async function getCustomersWithDebt(companyId: string) {
   return await db.select().from(contacts)
     .where(and(
-      eq(contacts.organizationId, organizationId),
+      eq(contacts.companyId, companyId),
       eq(contacts.active, 1),
       or(eq(contacts.contactType, 'customer'), eq(contacts.contactType, 'both'))
     ));
