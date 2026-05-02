@@ -1,6 +1,8 @@
 import { drizzle } from 'drizzle-orm/d1';
 import * as schema from './schema';
 import type { H3Event } from 'h3';
+import type { D1Database } from '@cloudflare/workers-types';
+import { eq } from 'drizzle-orm';
 
 /**
  * ScopedDB: Garantiza aislamiento de datos por CompanyID

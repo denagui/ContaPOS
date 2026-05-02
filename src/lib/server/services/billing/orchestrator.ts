@@ -11,7 +11,7 @@
  */
 
 import type { Database } from '$lib/server/db';
-import { organizationSettings, organizations, contacts } from '$lib/server/db';
+import { companySettings, contacts, companies } from '$lib/server/db';
 import { eq, and } from 'drizzle-orm';
 import type {
   BillingAdapter,
@@ -234,11 +234,11 @@ export class BillingOrchestrator {
     try {
       const settings = await this.db
         .select()
-        .from(organizationSettings)
+        .from(companySettings)
         .where(
           and(
-            eq(organizationSettings.organizationId, this.organizationId),
-            eq(organizationSettings.settingKey, 'billingConfig')
+            eq(companySettings.companyId, this.organizationId),
+            eq(companySettings.settingKey, 'billingConfig')
           )
         )
         .limit(1);
@@ -344,20 +344,20 @@ export class BillingOrchestrator {
   } | null> {
     const orgs = await this.db
       .select()
-      .from(organizations)
-      .where(eq(organizations.id, this.organizationId))
+      .from(companies)
+      .where(eq(companies.id, this.organizationId))
       .limit(1);
 
-    if (!orgs.length) {
-      return null;
-    }
+      if (!orgs.length) {
+        return null;
+      }
 
-    const org = orgs[0];
-    return {
-      id: org.id,
-      name: org.name,
-      taxId: org.taxId,
-      legalName: org.legalName,
+      const org = orgs[0];
+      return {
+        id: org.id,
+        name: org.name,
+        taxId: org.taxId,
+        legalName: org.legalName,
       address: org.address,
       phone: org.phone,
       email: org.email,
@@ -374,7 +374,6 @@ export class BillingOrchestrator {
     email: string | null;
     phone: string | null;
     address: string | null;
-    city: string | null;
     province: string | null;
   } | null> {
     const results = await this.db
@@ -383,7 +382,7 @@ export class BillingOrchestrator {
       .where(
         and(
           eq(contacts.id, contactId),
-          eq(contacts.organizationId, this.organizationId)
+          eq(contacts.companyId, this.organizationId)
         )
       )
       .limit(1);
@@ -400,7 +399,6 @@ export class BillingOrchestrator {
       email: contact.email,
       phone: contact.phone,
       address: contact.address,
-      city: contact.city,
       province: contact.province,
     };
   }
