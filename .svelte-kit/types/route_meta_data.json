@@ -1,0 +1,40 @@
+{
+	"/": [
+		"src/routes/+page.server.ts"
+	],
+	"/api/sales/[id]/ticket": [
+		"src/routes/api/sales/[id]/ticket/+server.ts"
+	],
+	"/banking": [
+		"src/routes/banking/+page.server.ts"
+	],
+	"/banking/history": [],
+	"/banking/import": [
+		"src/routes/banking/import/+page.server.ts"
+	],
+	"/banking/reconcile": [
+		"src/routes/banking/reconcile/+page.server.ts"
+	],
+	"/contacts": [
+		"src/routes/contacts/+page.server.ts"
+	],
+	"/crm": [],
+	"/expenses": [
+		"src/routes/expenses/+page.server.ts"
+	],
+	"/inventory": [
+		"src/routes/inventory/+page.server.ts"
+	],
+	"/login": [],
+	"/pos": [
+		"src/routes/pos/+page.server.ts"
+	],
+	"/reports": [],
+	"/reports/tax": [],
+	"/settings": [
+		"src/routes/settings/+page.server.ts"
+	],
+	"/settings/billing": [
+		"src/routes/settings/billing/+page.server.ts"
+	]
+}
